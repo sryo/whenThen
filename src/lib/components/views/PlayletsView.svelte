@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Component } from "svelte";
+  import type { IconType } from "$lib/types/ui";
   import {
     Plus,
     Link,
@@ -56,7 +57,7 @@
   };
 
   interface TriggerIcon {
-    icon: Component;
+    icon: IconType;
     color: string;
   }
 
@@ -141,7 +142,7 @@
   interface ActionBlock {
     label: string;
     color: string;
-    icon: Component;
+    icon: IconType;
   }
 
   function buildActionBlocks(playlet: Playlet): ActionBlock[] {
@@ -362,7 +363,7 @@
             <div data-flow-block class="flex flex-col items-center gap-1 rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 px-3 py-2">
               <div class="flex items-center gap-1.5">
                 {#each triggerIcons as ti}
-                  {@const Icon = ti.icon}
+                  {@const Icon = ti.icon as Component}
                   <Icon style="color: {ti.color};" class="h-7 w-7 shrink-0" />
                 {/each}
               </div>
@@ -468,7 +469,7 @@
                 <div data-flow-block class="flex flex-col items-center gap-1 rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 px-2 py-1.5">
                   <div class="flex items-center gap-1">
                     {#each tIcons as ti}
-                      {@const Icon = ti.icon}
+                      {@const Icon = ti.icon as Component}
                       <Icon style="color: {ti.color};" class="h-4 w-4 shrink-0" />
                     {/each}
                   </div>

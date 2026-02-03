@@ -1,6 +1,7 @@
 <!-- Reusable action block for pipelines, cards, and pickers. -->
 <script lang="ts">
   import type { Component } from "svelte";
+  import type { IconType } from "$lib/types/ui";
   import { Check, Play, X } from "lucide-svelte";
 
   let {
@@ -11,7 +12,7 @@
     size = "md",
     status,
   }: {
-    icon: Component;
+    icon: IconType;
     color: string;
     label: string;
     /** Configured value shown next to pip circles, below card blocks. */
@@ -20,7 +21,7 @@
     status?: "done" | "running" | "pending" | "failed" | "skipped";
   } = $props();
 
-  const Icon = $derived(icon);
+  const Icon = $derived(icon as Component);
   const active = $derived(!status || status === "done" || status === "running");
 </script>
 

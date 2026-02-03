@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Component } from "svelte";
+  import type { IconType } from "$lib/types/ui";
   import { Link, Filter, FileVideo } from "lucide-svelte";
   import { uiState } from "$lib/state/ui.svelte";
   import { playletsState, derivePlayletName } from "$lib/state/playlets.svelte";
@@ -10,7 +11,7 @@
 
   interface CardSegment {
     color: string;
-    icon: Component;
+    icon: IconType;
   }
 
   function buildSegments(playlet: Playlet): CardSegment[] {
@@ -127,7 +128,7 @@
           <!-- Fused icon strip with chevron interlocks -->
           <div class="flex h-10 w-full">
             {#each pickerSegments as segment, j}
-              {@const Icon = segment.icon}
+              {@const Icon = segment.icon as Component}
               <div
                 class="flex flex-1 items-center justify-center"
                 style={segmentStyle(segment.color, j, pickerSegments.length)}

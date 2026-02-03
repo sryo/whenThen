@@ -1,4 +1,4 @@
-import type { Component } from "svelte";
+import type { IconType } from "$lib/types/ui";
 import type { Action } from "$lib/types/playlet";
 import { devicesState } from "$lib/state/devices.svelte";
 import {
@@ -17,7 +17,7 @@ export interface ActionDefinition {
   type: string;
   label: string;
   verb: string;
-  icon: Component;
+  icon: IconType;
   color: string;
   configLabel: string;
   defaultData: Record<string, unknown>;
@@ -71,7 +71,7 @@ registerAction({
   type: "cast",
   label: "Cast",
   verb: "cast",
-  icon: Cast as Component,
+  icon: Cast,
   color: "var(--color-primary)",
   configLabel: "Cast to",
   defaultData: { deviceId: null },
@@ -81,7 +81,7 @@ registerAction({
   type: "move",
   label: "Move",
   verb: "move",
-  icon: FolderOutput as Component,
+  icon: FolderOutput,
   color: "var(--color-warning)",
   configLabel: "Move to",
   defaultData: { destination: "" },
@@ -91,7 +91,7 @@ registerAction({
   type: "notify",
   label: "Notify",
   verb: "notify",
-  icon: Bell as Component,
+  icon: Bell,
   color: "var(--color-success)",
   configLabel: "Send",
   defaultData: { method: "system" },
@@ -101,7 +101,7 @@ registerAction({
   type: "play",
   label: "Play",
   verb: "play",
-  icon: MonitorPlay as Component,
+  icon: MonitorPlay,
   color: "var(--color-error)",
   configLabel: "Play in",
   defaultData: { app: "" },
@@ -111,7 +111,7 @@ registerAction({
   type: "subtitle",
   label: "Subtitles",
   verb: "subtitle",
-  icon: Subtitles as Component,
+  icon: Subtitles,
   color: "#6366f1",
   configLabel: "Fetch in",
   defaultData: { languages: [] },
@@ -121,7 +121,7 @@ registerAction({
   type: "automation",
   label: "Automation",
   verb: "automate",
-  icon: Terminal as Component,
+  icon: Terminal,
   color: "#8b5cf6",
   configLabel: "Run",
   defaultData: { method: "shell", script: "", shortcutName: "" },
@@ -131,7 +131,7 @@ registerAction({
   type: "delay",
   label: "Delay",
   verb: "wait",
-  icon: Timer as Component,
+  icon: Timer,
   color: "#64748b",
   configLabel: "Wait",
   defaultData: { seconds: 5, delayUnit: "seconds" },
@@ -141,7 +141,7 @@ registerAction({
   type: "webhook",
   label: "Webhook",
   verb: "webhook",
-  icon: Globe as Component,
+  icon: Globe,
   color: "#06b6d4",
   configLabel: "Send to",
   defaultData: { url: "", method: "POST" },
@@ -151,7 +151,7 @@ registerAction({
   type: "delete_source",
   label: "Delete",
   verb: "clean up",
-  icon: Trash2 as Component,
+  icon: Trash2,
   color: "#ef4444",
   configLabel: "Delete",
   defaultData: { deleteFiles: true },

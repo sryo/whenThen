@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Component } from "svelte";
   import {
     Trash2,
     Tv,
@@ -70,7 +71,7 @@
     isAutoGroup ? getActionDef("automation") : getActionDef(action.type)
   );
   const Icon = $derived(
-    isAutoGroup ? Terminal : def?.icon
+    (isAutoGroup ? Terminal : def?.icon) as Component | undefined
   );
   const cardColor = $derived(
     isAutoGroup ? "#8b5cf6" : (def?.color ?? "var(--color-primary)")
@@ -277,7 +278,7 @@
               oninput={(e) => playletsState.updateAction<AutomationAction>(playletId, action.id, { script: (e.target as HTMLTextAreaElement).value })}
               placeholder="echo $TORRENT_NAME"
               rows={3}
-              autocorrect="off"
+  
               autocapitalize="off"
               spellcheck={false}
               class="w-full rounded-lg bg-black/20 px-2 py-1 text-sm text-white/90 outline-none placeholder:text-white/40 font-mono resize-y"
@@ -288,7 +289,7 @@
               oninput={(e) => playletsState.updateAction<AutomationAction>(playletId, action.id, { script: (e.target as HTMLTextAreaElement).value })}
               placeholder='display dialog "Done downloading!"'
               rows={3}
-              autocorrect="off"
+  
               autocapitalize="off"
               spellcheck={false}
               class="w-full rounded-lg bg-black/20 px-2 py-1 text-sm text-white/90 outline-none placeholder:text-white/40 font-mono resize-y"
@@ -299,7 +300,7 @@
               value={autoAction.shortcutName}
               oninput={(e) => playletsState.updateAction<AutomationAction>(playletId, action.id, { shortcutName: (e.target as HTMLInputElement).value })}
               placeholder="My Shortcut Name"
-              autocorrect="off"
+  
               autocapitalize="off"
               spellcheck={false}
               class="h-8 w-full rounded-lg bg-black/20 px-2 text-sm text-white/90 outline-none placeholder:text-white/40"
@@ -333,7 +334,7 @@
             value={webhookAction.url}
             oninput={(e) => playletsState.updateAction<WebhookAction>(playletId, action.id, { url: (e.target as HTMLInputElement).value })}
             placeholder="https://example.com/webhook"
-            autocorrect="off"
+
             autocapitalize="off"
             spellcheck={false}
             class="h-8 w-full rounded-lg bg-black/20 px-2 text-sm text-white/90 outline-none placeholder:text-white/40"

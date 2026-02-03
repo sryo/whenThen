@@ -20,7 +20,7 @@ let storeInstance: Awaited<ReturnType<typeof load>> | null = null;
 
 async function getStore() {
   if (!storeInstance) {
-    storeInstance = await load("playlets.json", { autoSave: true });
+    storeInstance = await load("playlets.json", { autoSave: true, defaults: {} });
   }
   return storeInstance;
 }
@@ -283,7 +283,7 @@ export const playletsState = {
 
     // Try migrating from old actions.json
     try {
-      const actionsStore = await load("actions.json", { autoSave: false });
+      const actionsStore = await load("actions.json", { autoSave: false, defaults: {} });
       const oldActions = await actionsStore.get<Action[]>("actions");
       if (oldActions && Array.isArray(oldActions) && oldActions.length > 0) {
         const defaultPlaylet: Playlet = {

@@ -1,4 +1,7 @@
-import type { Component } from "svelte";
+import type { Component, ComponentType, SvelteComponent } from "svelte";
+
+// lucide-svelte exports Svelte 4 class components; this union accepts both styles
+export type IconType = Component | ComponentType<SvelteComponent<any>>;
 
 export type ViewName = "playlets" | "activity" | "settings";
 
@@ -10,7 +13,7 @@ export interface Toast {
 
 export interface ContextMenuItem {
   type?: "item";
-  icon?: Component;
+  icon?: IconType;
   label: string;
   action: () => void;
   disabled?: boolean;

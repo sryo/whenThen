@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Component } from "svelte";
   import type { ContextMenuEntry } from "$lib/types/ui";
 
   let {
@@ -101,7 +102,7 @@
               : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]'}"
         >
           {#if item.icon}
-            {@const Icon = item.icon}
+            {@const Icon = item.icon as Component}
             <Icon class="h-4 w-4" />
           {/if}
           {item.label}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Component } from "svelte";
+  import type { IconType } from "$lib/types/ui";
   import {
     Check,
     ChevronDown,
@@ -132,7 +133,7 @@
 
   // Step info from action results
   interface StepInfo {
-    icon: Component;
+    icon: IconType;
     color: string;
     label: string;
     value: string | null;
@@ -163,7 +164,7 @@
     }
 
     const downloadStep: StepInfo = {
-      icon: Download as Component,
+      icon: Download,
       color: "var(--color-info)",
       label: "Download",
       value: null,
@@ -190,7 +191,7 @@
 
   // Build action blocks for a playlet (picker dropdown)
   interface BlockInfo {
-    icon: Component;
+    icon: IconType;
     color: string;
     label: string;
     value: string | null;

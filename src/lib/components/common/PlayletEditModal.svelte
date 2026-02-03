@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Component } from "svelte";
   import {
     Plus,
     Copy,
@@ -123,7 +124,7 @@
   const activeFileCategory = $derived(playlet?.fileFilter?.category ?? "all");
   const derivedName = $derived(playlet ? derivePlayletName(playlet) : "");
   const activeTriggerType = $derived(playlet?.trigger?.type ?? "torrent_added");
-  const ActiveTriggerIcon = $derived(triggerTypeIcons[activeTriggerType]);
+  const ActiveTriggerIcon = $derived(triggerTypeIcons[activeTriggerType] as unknown as Component);
 
   // Count existing torrents that match the current Where conditions
   const matchCount = $derived(() => {
@@ -333,7 +334,7 @@
           {derivedName}
         </span>
         <button
-          onclick={requestClose}
+          onclick={() => requestClose()}
           class="ml-3 shrink-0 rounded-lg p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
         >
           <X class="h-5 w-5" />
@@ -352,7 +353,7 @@
 
             <div class="mt-3 grid grid-cols-2 gap-2">
               {#each Object.entries(triggerTypeLabels) as [type, label]}
-                {@const TrigIcon = triggerTypeIcons[type as TriggerType]}
+                {@const TrigIcon = triggerTypeIcons[type as TriggerType] as unknown as Component}
                 <button
                   onclick={() => setTriggerType(type as TriggerType)}
                   class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors {activeTriggerType === type ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-primary)]/15 text-[var(--color-primary)]'} hover:opacity-80"
@@ -489,7 +490,7 @@
                         value={condition.value}
                         oninput={(e) => playletsState.updateCondition(playlet.id, condition.id, { value: (e.target as HTMLInputElement).value })}
                         placeholder="e.g. 1080p"
-                        autocorrect="off"
+
                         autocapitalize="off"
                         spellcheck={false}
                         class="h-7 min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-info)]"
@@ -530,7 +531,7 @@
 
             <div class="mt-3 grid grid-cols-2 gap-2">
               {#each Object.entries(filterCategoryLabels).filter(([cat]) => cat !== "subtitle") as [cat, label]}
-                {@const CatIcon = filterCategoryIcons[cat as FileFilterCategory]}
+                {@const CatIcon = filterCategoryIcons[cat as FileFilterCategory] as unknown as Component}
                 <button
                   onclick={() => setFilterCategory(cat as FileFilterCategory)}
                   class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors {activeFileCategory === cat ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-accent)]/15 text-[var(--color-accent)]'} hover:opacity-80"
@@ -658,7 +659,7 @@
                 {@const def = getActionDef(item.type)}
                 {@const taken = isActionTaken(item.type)}
                 {#if def}
-                  {@const DefIcon = def.icon}
+                  {@const DefIcon = def.icon as Component}
                   <button
                     onclick={() => addAction(item.type as ActionType)}
                     disabled={taken}

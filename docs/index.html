@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>whenThen – Tiny automations for your torrents</title>
+  <meta name="description" content="Small when→then automations for your torrents. Like applets, but for downloads. We call them playlets." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Design tokens ── */
+    :root {
+      color-scheme: light;
+      --color-primary: #6366f1;
+      --color-primary-hover: #4f46e5;
+      --color-bg: #ffffff;
+      --color-bg-secondary: #f8fafc;
+      --color-bg-tertiary: #f1f5f9;
+      --color-text: #0f172a;
+      --color-text-secondary: #475569;
+      --color-text-muted: #94a3b8;
+      --color-border: #e2e8f0;
+      --color-success: #22c55e;
+      --color-warning: #f59e0b;
+      --color-error: #ef4444;
+      --color-info: #2563eb;
+      --color-accent: #0d9488;
+      --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --color-primary: #818cf8;
+        --color-primary-hover: #6366f1;
+        --color-bg: #1e1e1e;
+        --color-bg-secondary: #272727;
+        --color-bg-tertiary: #303030;
+        --color-text: #ffffff;
+        --color-text-secondary: #c7c7c7;
+        --color-text-muted: #8e8e93;
+        --color-border: #3b3b3b;
+        --color-success: #4ade80;
+        --color-warning: #fbbf24;
+        --color-error: #f87171;
+        --color-info: #60a5fa;
+        --color-accent: #2dd4bf;
+      }
+    }
+
+    /* ── Base ── */
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--color-bg);
+      color: var(--color-text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    a { color: var(--color-primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Layout ── */
+    .container { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+    .section { padding: 80px 0; }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 120px 0 80px;
+    }
+    .hero-title {
+      font-size: 4rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      color: var(--color-text);
+    }
+    .hero-tagline {
+      font-size: 1.25rem;
+      color: var(--color-text-secondary);
+      margin-top: 16px;
+    }
+    .hero-link {
+      display: inline-block;
+      margin-top: 40px;
+      font-size: 1rem;
+      font-weight: 400;
+      color: var(--color-primary);
+    }
+    .hero-link:hover { text-decoration: underline; }
+
+    /* ── Section headings ── */
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-text-muted);
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .section-heading {
+      font-size: 2rem;
+      font-weight: 800;
+      text-align: center;
+      margin-bottom: 48px;
+      letter-spacing: -0.02em;
+    }
+
+    /* ── Showcase ── */
+    .showcase {
+      margin-top: 48px;
+      text-align: center;
+    }
+    .showcase-tabs {
+      display: inline-flex;
+      gap: 6px;
+      padding: 4px;
+      background: var(--color-bg-tertiary);
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+    .showcase-tab {
+      padding: 8px 20px;
+      border-radius: 10px;
+      border: none;
+      background: transparent;
+      font-family: inherit;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--color-text-muted);
+      cursor: pointer;
+      transition: background 150ms, color 150ms;
+    }
+    .showcase-tab:hover {
+      color: var(--color-text-secondary);
+    }
+    .showcase-tab.active {
+      background: var(--color-bg);
+      color: var(--color-text);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .showcase-panel-wrap {
+      position: relative;
+      min-height: 300px;
+    }
+    .showcase-panel {
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: 16px;
+      padding: 32px 24px;
+      text-align: left;
+      opacity: 0;
+      position: absolute;
+      inset: 0;
+      transition: opacity 150ms;
+      pointer-events: none;
+    }
+    .showcase-panel.active {
+      opacity: 1;
+      position: relative;
+      pointer-events: auto;
+    }
+
+    .showcase-sentence {
+      font-size: 1.1rem;
+      line-height: 1.6;
+      color: var(--color-text-secondary);
+      margin-bottom: 28px;
+      text-align: center;
+    }
+    .showcase-sentence .when {
+      font-weight: 700;
+      color: var(--color-primary);
+    }
+    .showcase-sentence .action-word {
+      font-weight: 700;
+      color: var(--color-success);
+    }
+
+    /* ── Edit UI sections ── */
+    .showcase-edit {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .edit-section {
+      width: 100%;
+      max-width: 420px;
+      border-radius: 12px;
+      padding: 16px 20px;
+      border: 1.5px solid;
+    }
+    .edit-section-when {
+      border-color: rgba(99, 102, 241, 0.3);
+      background: rgba(99, 102, 241, 0.06);
+    }
+    .edit-section-with {
+      border-color: rgba(13, 148, 136, 0.3);
+      background: rgba(13, 148, 136, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      .edit-section-when {
+        border-color: rgba(129, 140, 248, 0.3);
+        background: rgba(129, 140, 248, 0.08);
+      }
+      .edit-section-with {
+        border-color: rgba(45, 212, 191, 0.3);
+        background: rgba(45, 212, 191, 0.08);
+      }
+    }
+    .edit-section-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .edit-section-label {
+      font-size: 1.5rem;
+      font-weight: 900;
+    }
+    .edit-section-icon { display: flex; align-items: center; }
+    .edit-section-icon svg { width: 26px; height: 26px; }
+    .edit-section-name {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--color-text);
+    }
+
+    .connector-bar {
+      display: flex;
+      justify-content: center;
+      height: 24px;
+    }
+    .connector-bar-inner {
+      width: 2px;
+      height: 100%;
+      background: var(--color-border);
+      border-radius: 1px;
+    }
+
+    .action-row {
+      width: 100%;
+      max-width: 420px;
+      border-radius: 10px;
+      padding: 14px 18px;
+      border: 1.5px solid;
+      border-color: color-mix(in srgb, var(--action-color) 30%, transparent);
+      background: var(--action-color);
+    }
+    .action-row + .action-row { margin-top: 8px; }
+    .action-row-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .action-row-label {
+      font-size: 1.5rem;
+      font-weight: 900;
+      color: #fff;
+    }
+    .action-row-icon { display: flex; align-items: center; }
+    .action-row-icon svg { width: 20px; height: 20px; color: rgba(255,255,255,0.7); }
+    .action-row-config {
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.875rem;
+    }
+    .action-row-config-label {
+      color: rgba(255,255,255,0.7);
+      font-weight: 600;
+    }
+    .action-row-config-value {
+      color: rgba(255,255,255,0.9);
+      font-weight: 500;
+    }
+
+    /* ── Catalog grid ("Much more" tab) ── */
+    .showcase-catalog {
+      text-align: left;
+    }
+    .catalog-section {
+      margin-bottom: 24px;
+    }
+    .catalog-section:last-child { margin-bottom: 0; }
+    .catalog-section-title {
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-muted);
+      margin-bottom: 10px;
+    }
+    .catalog-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .catalog-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .catalog-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .catalog-trigger {
+      border-color: rgba(99, 102, 241, 0.25);
+      background: rgba(99, 102, 241, 0.07);
+      color: var(--color-primary);
+    }
+    .catalog-action {
+      border-color: color-mix(in srgb, var(--block-color) 25%, transparent);
+      background: color-mix(in srgb, var(--block-color) 10%, transparent);
+      color: var(--block-color);
+    }
+    .catalog-action svg { color: var(--block-color); }
+    @media (prefers-color-scheme: dark) {
+      .catalog-trigger {
+        border-color: rgba(129, 140, 248, 0.3);
+        background: rgba(129, 140, 248, 0.1);
+      }
+      .catalog-action {
+        background: color-mix(in srgb, var(--block-color) 14%, transparent);
+      }
+    }
+
+    /* ── FAQ ── */
+    .faq-list { max-width: 640px; margin: 0 auto; }
+    .faq-item {
+      border-bottom: 1px solid var(--color-border);
+    }
+    .faq-item:first-child { border-top: 1px solid var(--color-border); }
+    .faq-question {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 0;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--color-text);
+      text-align: left;
+    }
+    .faq-question:hover { color: var(--color-primary); }
+    .faq-question svg {
+      width: 20px; height: 20px;
+      color: var(--color-text-muted);
+      transition: transform 200ms var(--ease-out);
+      flex-shrink: 0;
+      margin-left: 12px;
+    }
+    .faq-question.open svg { transform: rotate(180deg); }
+    .faq-answer {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 200ms var(--ease-out), opacity 200ms;
+      opacity: 0;
+    }
+    .faq-answer.open {
+      max-height: 200px;
+      opacity: 1;
+    }
+    .faq-answer p {
+      padding-bottom: 16px;
+      font-size: 0.875rem;
+      color: var(--color-text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ── Footer ── */
+    .page-footer {
+      text-align: center;
+      padding: 40px 0;
+      font-size: 0.8rem;
+      color: var(--color-text-muted);
+      border-top: 1px solid var(--color-border);
+    }
+
+    /* ── Scroll-fade animation ── */
+    .fade-in {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 400ms var(--ease-out), transform 400ms var(--ease-out);
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .hero-title { font-size: 2.5rem; }
+      .hero-tagline { font-size: 1.05rem; }
+      .showcase-tabs { flex-wrap: wrap; justify-content: center; }
+      .showcase-tab { padding: 6px 14px; font-size: 0.8rem; }
+      .showcase-panel { padding: 24px 16px; }
+      .showcase-sentence { font-size: 0.95rem; }
+      .edit-section, .action-row { max-width: 100%; }
+      .catalog-grid { gap: 6px; }
+      .catalog-item { padding: 6px 10px; font-size: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Icon templates ── -->
+<template id="icon-link"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></template>
+<template id="icon-circle-check"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></template>
+<template id="icon-file-search"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M4.268 21a2 2 0 0 0 1.727 1H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v3"/><path d="m9 18-1.5-1.5"/><circle cx="7" cy="14" r="3"/></svg></template>
+<template id="icon-arrow-up-down"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></template>
+<template id="icon-folder-search"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="17" cy="17" r="3"/><path d="M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1"/><path d="m21 21-1.5-1.5"/></svg></template>
+<template id="icon-cast"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><path d="M2 12a9 9 0 0 1 8 8"/><path d="M2 16a5 5 0 0 1 4 4"/><circle cx="2" cy="20" r="1"/></svg></template>
+<template id="icon-folder-output"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7.5V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1"/><path d="M2 13h10"/><path d="m5 10-3 3 3 3"/></svg></template>
+<template id="icon-bell"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></template>
+<template id="icon-monitor-play"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 7.75a.75.75 0 0 1 1.142-.638l3.664 2.249a.75.75 0 0 1 0 1.278l-3.664 2.25a.75.75 0 0 1-1.142-.64z"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/></svg></template>
+<template id="icon-subtitles"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13h4"/><path d="M15 13h2"/><path d="M7 9h2"/><path d="M13 9h4"/><rect width="20" height="14" x="2" y="3" rx="2"/></svg></template>
+<template id="icon-terminal"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg></template>
+<template id="icon-timer"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></svg></template>
+<template id="icon-globe"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></template>
+<template id="icon-trash"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></template>
+<template id="icon-plus"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></template>
+<template id="icon-x"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></template>
+<template id="icon-filter"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></template>
+
+<template id="icon-chevron-down"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></template>
+<template id="icon-files"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-3a2 2 0 0 1-2-2V2"/><path d="M9 18a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h7l4 4v10a2 2 0 0 1-2 2Z"/><path d="M3 7.6v12.8A1.6 1.6 0 0 0 4.6 22h9.8"/></svg></template>
+<template id="icon-file-video"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m10 11 5 3-5 3v-6Z"/></svg></template>
+<template id="icon-music"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></template>
+
+<template id="icon-file-code"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m10 13-2 2 2 2"/><path d="m14 17 2-2-2-2"/></svg></template>
+<template id="icon-github"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg></template>
+
+<!-- ── Hero ── -->
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">whenThen</h1>
+    <p class="hero-tagline">Tiny automations for your torrents</p>
+
+    <div class="showcase" id="showcase"></div>
+
+    <a href="https://github.com/nicobailon/whenthen" class="hero-link" target="_blank" rel="noopener">Get from GitHub</a>
+  </div>
+</section>
+
+<!-- ── FAQ ── -->
+<section class="section">
+  <div class="container">
+    <p class="section-label">FAQ</p>
+    <h2 class="section-heading fade-in">Common questions</h2>
+    <div class="faq-list fade-in" id="faq-list"></div>
+  </div>
+</section>
+
+<!-- ── Footer ── -->
+<footer class="page-footer">
+  <div class="container">&copy; 2025 sryo</div>
+</footer>
+
+<script>
+(function() {
+  "use strict";
+
+  // ── Helpers ──
+
+  function icon(id) {
+    const tpl = document.getElementById("icon-" + id);
+    if (!tpl) return "";
+    return tpl.innerHTML;
+  }
+
+  function iconEl(id) {
+    const tpl = document.getElementById("icon-" + id);
+    if (!tpl) return document.createElement("span");
+    const wrapper = document.createElement("span");
+    wrapper.innerHTML = tpl.innerHTML;
+    return wrapper.firstElementChild;
+  }
+
+  // ── Registries ──
+
+  const actionDefs = {
+    cast:          { label: "Cast",       icon: "cast",           color: "var(--color-primary)", configLabel: "Cast to",  configValue: "Living Room" },
+    move:          { label: "Move",       icon: "folder-output",  color: "var(--color-warning)", configLabel: "Move to",  configValue: "~/Movies" },
+    notify:        { label: "Notify",     icon: "bell",           color: "var(--color-success)", configLabel: "Send",     configValue: "System notification" },
+    play:          { label: "Play",       icon: "monitor-play",   color: "var(--color-error)",   configLabel: "Play in",  configValue: "IINA" },
+    subtitle:      { label: "Subtitles",  icon: "subtitles",      color: "#6366f1",              configLabel: "Fetch in", configValue: "en" },
+    automation:    { label: "Automation", icon: "terminal",       color: "#8b5cf6",              configLabel: "Run",      configValue: "AppleScript" },
+    delay:         { label: "Delay",      icon: "timer",          color: "#64748b",              configLabel: "Wait",     configValue: "5s" },
+    webhook:       { label: "Webhook",    icon: "globe",          color: "#06b6d4",              configLabel: "Send to",  configValue: "POST" },
+    delete_source: { label: "Delete",     icon: "trash",          color: "#ef4444",              configLabel: "Delete",   configValue: "with files" },
+  };
+
+  const triggerDefs = {
+    torrent_added:     { label: "Torrent added",     icon: "link" },
+    download_complete: { label: "Download complete",  icon: "circle-check" },
+    metadata_received: { label: "Metadata ready",     icon: "file-search" },
+    seeding_ratio:     { label: "Seeding ratio",      icon: "arrow-up-down" },
+    folder_watch:      { label: "Folder watch",       icon: "folder-search" },
+  };
+
+  const filterDefs = {
+    all:      { label: "Any file",    icon: "files" },
+    video:    { label: "Video files", icon: "file-video" },
+    audio:    { label: "Audio files", icon: "music" },
+    custom:   { label: "Custom",      icon: "file-code" },
+  };
+
+  // ── Playlets ──
+
+  const playlets = [
+    {
+      id: "movie-night",
+      name: "Movie Night",
+      enabled: true,
+      trigger: { type: "torrent_added" },
+      actions: [
+        { type: "cast", value: "Living Room" },
+        { type: "subtitle", value: "en" },
+      ],
+      fileFilter: { category: "video" },
+      conditions: [],
+      sentence: '<span class="when">When</span> a torrent is added, <span class="action-word">cast</span> it to the living room TV.',
+    },
+    {
+      id: "organize-media",
+      name: "Organize Media",
+      enabled: true,
+      trigger: { type: "torrent_added" },
+      actions: [
+        { type: "automation", value: "AppleScript" },
+        { type: "move", value: "~/Movies" },
+        { type: "subtitle", value: "en" },
+      ],
+      fileFilter: { category: "video" },
+      conditions: [],
+      sentence: '<span class="when">When</span> a torrent is added, <span class="action-word">rename</span>, <span class="action-word">move</span>, and <span class="action-word">subtitle</span> it automatically.',
+    },
+    {
+      id: "seed-notify",
+      name: "Seed & Notify",
+      enabled: true,
+      trigger: { type: "seeding_ratio", seedingRatio: 2.0 },
+      actions: [
+        { type: "notify", value: "Notify" },
+      ],
+      fileFilter: null,
+      conditions: [],
+      sentence: '<span class="when">When</span> seeding ratio hits 2.0, <span class="action-word">send</span> a notification.',
+    },
+  ];
+
+  // ── Build edit UI HTML for a playlet ──
+
+  function buildEditUI(p) {
+    var trig = triggerDefs[p.trigger.type] || triggerDefs.torrent_added;
+    var trigLabel = trig.label;
+    if (p.trigger.type === "seeding_ratio") {
+      trigLabel += " " + (p.trigger.seedingRatio || 2.0);
+    }
+
+    var html = '<div class="showcase-edit">';
+
+    // When section
+    html += '<div class="edit-section edit-section-when">' +
+      '<div class="edit-section-header">' +
+      '<span class="edit-section-label" style="color:var(--color-primary)">When</span>' +
+      '<span class="edit-section-icon"><svg style="width:26px;height:26px;color:var(--color-primary)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + iconEl(trig.icon).innerHTML + '</svg></span>' +
+      '<span class="edit-section-name">' + trigLabel + '</span>' +
+      '</div></div>';
+
+    // Connector
+    html += '<div class="connector-bar"><div class="connector-bar-inner"></div></div>';
+
+    // With section (file filter)
+    if (p.fileFilter) {
+      var fDef = filterDefs[p.fileFilter.category] || filterDefs.all;
+      html += '<div class="edit-section edit-section-with">' +
+        '<div class="edit-section-header">' +
+        '<span class="edit-section-label" style="color:var(--color-accent)">With</span>' +
+        '<span class="edit-section-icon"><svg style="width:26px;height:26px;color:var(--color-accent)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + iconEl(fDef.icon).innerHTML + '</svg></span>' +
+        '<span class="edit-section-name">' + fDef.label + '</span>' +
+        '</div></div>';
+
+      html += '<div class="connector-bar"><div class="connector-bar-inner"></div></div>';
+    }
+
+    // Action rows
+    p.actions.forEach(function(a, i) {
+      var def = actionDefs[a.type];
+      if (!def) return;
+      var rowLabel = i === 0 ? "Then" : "And";
+
+      html += '<div class="action-row" style="--action-color:' + def.color + '">' +
+        '<div class="action-row-header">' +
+        '<span class="action-row-label">' + rowLabel + '</span>' +
+        '<span class="action-row-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + iconEl(def.icon).innerHTML + '</svg></span>' +
+        '</div>' +
+        '<div class="action-row-config">' +
+        '<span class="action-row-config-label">' + def.configLabel + '</span>' +
+        '<span class="action-row-config-value">' + (a.value || def.configValue) + '</span>' +
+        '</div>' +
+        '</div>';
+    });
+
+    html += '</div>';
+    return html;
+  }
+
+  // ── Build catalog HTML ("Much more" tab) ──
+
+  function buildCatalog() {
+    var html = '<div class="showcase-catalog">';
+
+    // Triggers
+    html += '<div class="catalog-section">' +
+      '<div class="catalog-section-title">Triggers</div>' +
+      '<div class="catalog-grid">';
+    Object.keys(triggerDefs).forEach(function(key) {
+      var t = triggerDefs[key];
+      html += '<div class="catalog-item catalog-trigger">' +
+        '<svg style="width:18px;height:18px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + iconEl(t.icon).innerHTML + '</svg>' +
+        t.label + '</div>';
+    });
+    html += '</div></div>';
+
+    // Actions
+    html += '<div class="catalog-section">' +
+      '<div class="catalog-section-title">Actions</div>' +
+      '<div class="catalog-grid">';
+    Object.keys(actionDefs).forEach(function(key) {
+      var a = actionDefs[key];
+      html += '<div class="catalog-item catalog-action" style="--block-color:' + a.color + '">' +
+        '<svg style="width:18px;height:18px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + iconEl(a.icon).innerHTML + '</svg>' +
+        a.label + '</div>';
+    });
+    html += '</div></div>';
+
+    html += '</div>';
+    return html;
+  }
+
+  // ── Showcase tabs ──
+
+  var showcaseTabs = playlets.map(function(p) { return p.name; });
+  showcaseTabs.push("Much more");
+
+  var activeTab = 0;
+
+  function renderShowcase() {
+    var root = document.getElementById("showcase");
+
+    // Tabs
+    var tabsHTML = '<div class="showcase-tabs">';
+    showcaseTabs.forEach(function(name, i) {
+      tabsHTML += '<button class="showcase-tab' + (i === 0 ? ' active' : '') + '" data-tab="' + i + '">' + name + '</button>';
+    });
+    tabsHTML += '</div>';
+
+    // Panels
+    var panelsHTML = '<div class="showcase-panel-wrap">';
+
+    // Playlet panels (edit UI)
+    playlets.forEach(function(p, i) {
+      panelsHTML += '<div class="showcase-panel' + (i === 0 ? ' active' : '') + '" data-panel="' + i + '">' +
+        '<div class="showcase-sentence">' + p.sentence + '</div>' +
+        buildEditUI(p) +
+        '</div>';
+    });
+
+    // "Much more" panel
+    var catalogIndex = playlets.length;
+    panelsHTML += '<div class="showcase-panel" data-panel="' + catalogIndex + '">' +
+      '<div class="showcase-sentence">Triggers, actions, filters \u2014 mix and match.</div>' +
+      buildCatalog() +
+      '</div>';
+
+    panelsHTML += '</div>';
+
+    root.innerHTML = tabsHTML + panelsHTML;
+
+    // Bind tab clicks
+    root.querySelectorAll(".showcase-tab").forEach(function(tab) {
+      tab.addEventListener("click", function() {
+        switchTab(parseInt(tab.dataset.tab, 10));
+      });
+    });
+  }
+
+  function switchTab(index) {
+    if (index === activeTab) return;
+    activeTab = index;
+
+    var root = document.getElementById("showcase");
+
+    root.querySelectorAll(".showcase-tab").forEach(function(tab) {
+      tab.classList.toggle("active", parseInt(tab.dataset.tab, 10) === index);
+    });
+
+    root.querySelectorAll(".showcase-panel").forEach(function(panel) {
+      panel.classList.toggle("active", parseInt(panel.dataset.panel, 10) === index);
+    });
+  }
+
+  // ── FAQ ──
+
+  var faqItems = [
+    {
+      q: "What are playlets?",
+      a: "Small when\u2192then automations for your torrents. Each playlet has a trigger (when something happens), optional conditions and file filters, and one or more actions (what to do). They run automatically in the background."
+    },
+    {
+      q: "What torrent client does it use?",
+      a: "whenThen has a built-in torrent engine powered by librqbit, a Rust-native BitTorrent client. No external torrent app needed."
+    },
+    {
+      q: "Can I cast to my TV?",
+      a: "Yes. whenThen discovers Chromecast devices on your local network and can cast media files directly. Just add a Cast action to any playlet and pick your device."
+    },
+    {
+      q: "What file types does the filter support?",
+      a: "Built-in categories: video (mp4, mkv, avi, mov, webm), audio (mp3, flac, wav, aac, ogg), and subtitles (srt, sub, ass, vtt). You can also set custom extensions."
+    },
+    {
+      q: "Does it work on macOS, Windows, and Linux?",
+      a: "whenThen is built with Tauri 2, so it runs natively on macOS, Windows, and Linux. Some features like AppleScript automation are macOS-only."
+    },
+    {
+      q: "Is it free and open source?",
+      a: "Yes. The source is on GitHub under an open license. You can build it yourself or grab a release."
+    },
+    {
+      q: "Can I run shell scripts or webhooks?",
+      a: "The Automation action supports shell scripts, AppleScript (macOS), and Apple Shortcuts. There\u2019s also a dedicated Webhook action that sends HTTP POST or GET requests to any URL."
+    },
+    {
+      q: "How is this different from other torrent tools?",
+      a: "Most torrent clients just download. whenThen lets you chain actions (cast, move, rename, notify, run scripts) triggered by events, all in one app. No separate tools or manual steps."
+    },
+  ];
+
+  function renderFAQ() {
+    var list = document.getElementById("faq-list");
+    list.innerHTML = "";
+
+    faqItems.forEach(function(item) {
+      var div = document.createElement("div");
+      div.className = "faq-item";
+
+      var btn = document.createElement("button");
+      btn.className = "faq-question";
+      btn.innerHTML = item.q + icon("chevron-down");
+
+      var answer = document.createElement("div");
+      answer.className = "faq-answer";
+      answer.innerHTML = "<p>" + item.a + "</p>";
+
+      btn.addEventListener("click", function() {
+        var isOpen = btn.classList.contains("open");
+        list.querySelectorAll(".faq-question.open").forEach(function(q) {
+          q.classList.remove("open");
+          q.nextElementSibling.classList.remove("open");
+        });
+        if (!isOpen) {
+          btn.classList.add("open");
+          answer.classList.add("open");
+        }
+      });
+
+      div.appendChild(btn);
+      div.appendChild(answer);
+      list.appendChild(div);
+    });
+  }
+
+  // ── Scroll-triggered fade-ins ──
+
+  function setupFadeIns() {
+    var observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("visible");
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll(".fade-in").forEach(function(el) {
+      observer.observe(el);
+    });
+  }
+
+  // ── Init ──
+
+  function init() {
+    renderShowcase();
+    renderFAQ();
+    setupFadeIns();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+
+})();
+</script>
+
+</body>
+</html>
