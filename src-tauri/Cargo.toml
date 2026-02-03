@@ -1,0 +1,38 @@
+[package]
+name = "when_then"
+version = "1.0.0"
+edition = "2021"
+description = "whenThen - Stream torrents to your Chromecast"
+
+[lib]
+name = "when_then_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-store = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-deep-link = "2"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+librqbit = "8"
+rust_cast = { version = "0.19", features = ["thread_safe"] }
+mdns-sd = "0.13"
+axum = "0.8"
+tower-http = { version = "0.6", features = ["cors"] }
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+local-ip-address = "0.6"
+uuid = { version = "1", features = ["v4"] }
+mime_guess = "2"
+dirs = "6"
+tokio-util = { version = "0.7", features = ["io"] }
+reqwest = { version = "0.12", features = ["json"] }
+notify = "7"
