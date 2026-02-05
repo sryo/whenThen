@@ -4,3 +4,4 @@ pub mod playback;
 pub mod media;
 pub mod settings;
 pub mod automation;
+pub mod associations;

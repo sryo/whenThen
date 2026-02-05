@@ -2,7 +2,7 @@
 <script lang="ts">
   import type { Component } from "svelte";
   import type { IconType } from "$lib/types/ui";
-  import { Check, Play, X } from "lucide-svelte";
+  import { Check, Play, SkipForward, X } from "lucide-svelte";
 
   let {
     icon,
@@ -23,6 +23,7 @@
 
   const Icon = $derived(icon as Component);
   const active = $derived(!status || status === "done" || status === "running");
+  const skipped = $derived(status === "skipped");
 </script>
 
 {#if size === "pip"}
@@ -40,9 +41,9 @@
           {status === 'running' ? 'pip-running' : ''}
           {status === 'pending' ? 'pip-pending' : ''}
           {status === 'failed' ? 'pip-failed' : ''}
-          {status === 'skipped' ? 'pip-pending opacity-30' : ''}"
+          {status === 'skipped' ? 'pip-skipped' : ''}"
       >
-        <Icon class="h-3 w-3 {active ? 'text-white' : 'text-[var(--color-text-muted)]'}" />
+        <Icon class="h-3 w-3 {active ? 'text-white' : skipped ? 'text-white' : 'text-[var(--color-text-muted)]'}" />
       </div>
       {#if status === "done"}
         <Check class="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[var(--color-success)] p-px text-white" />
@@ -50,10 +51,12 @@
         <Play class="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[var(--block-color)] p-px text-white" />
       {:else if status === "failed"}
         <X class="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[var(--color-error)] p-px text-white" />
+      {:else if status === "skipped"}
+        <SkipForward class="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[var(--color-warning)] p-px text-white" />
       {/if}
     </div>
     {#if value}
-      <span class="max-w-20 truncate text-[10px] font-medium {status === 'failed' ? 'text-[var(--color-error)]' : active ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'}">
+      <span class="max-w-20 truncate text-[10px] font-medium {status === 'failed' ? 'text-[var(--color-error)]' : skipped ? 'text-[var(--color-warning)]' : active ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'}">
         {value}
       </span>
     {/if}
@@ -69,7 +72,7 @@
       {status === 'running' ? 'block-running' : ''}
       {status === 'pending' ? 'block-pending' : ''}
       {status === 'failed' ? 'block-failed' : ''}
-      {status === 'skipped' ? 'block-pending opacity-30' : ''}"
+      {status === 'skipped' ? 'block-skipped' : ''}"
   >
     {#if status === 'done'}
       <div class="relative">
@@ -77,9 +80,9 @@
         <Check class="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-white" style="color: var(--block-color);" />
       </div>
     {:else}
-      <Icon class="{size === 'sm' ? 'h-4 w-4' : 'h-7 w-7'} shrink-0 {active ? 'text-white' : status === 'failed' ? 'text-[var(--color-error)]' : 'text-[var(--color-text-muted)]'}" />
+      <Icon class="{size === 'sm' ? 'h-4 w-4' : 'h-7 w-7'} shrink-0 {active ? 'text-white' : status === 'failed' ? 'text-[var(--color-error)]' : skipped ? 'text-[var(--color-warning)]' : 'text-[var(--color-text-muted)]'}" />
     {/if}
-    <span class="{size === 'sm' ? 'text-[10px]' : 'text-xs'} font-black {active ? 'text-white' : status === 'failed' ? 'text-[var(--color-error)]' : 'text-[var(--color-text-muted)]'}">
+    <span class="{size === 'sm' ? 'text-[10px]' : 'text-xs'} font-black {active ? 'text-white' : status === 'failed' ? 'text-[var(--color-error)]' : skipped ? 'text-[var(--color-warning)]' : 'text-[var(--color-text-muted)]'}">
       {value ?? label}
     </span>
   </div>
@@ -110,6 +113,11 @@
     border-color: var(--color-error);
   }
 
+  .block-skipped {
+    background-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
+    border-color: var(--color-warning);
+  }
+
   /* Pip (circle) styles */
   .pip-active {
     background-color: var(--block-color);
@@ -128,6 +136,10 @@
 
   .pip-failed {
     background-color: var(--color-error);
+  }
+
+  .pip-skipped {
+    background-color: var(--color-warning);
   }
 
 </style>

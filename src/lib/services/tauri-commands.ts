@@ -73,6 +73,10 @@ export async function torrentResume(id: number): Promise<void> {
   return dedup(`torrent_resume:${id}`, () => invoke("torrent_resume", { id }));
 }
 
+export async function torrentRecheck(id: number): Promise<TorrentAddedResponse> {
+  return invokeWithTimeout("torrent_recheck", { id }, 60_000);
+}
+
 export async function torrentDelete(
   id: number,
   deleteFiles: boolean,
@@ -146,6 +150,12 @@ export async function playbackSetVolume(
   return invoke("playback_set_volume", { deviceId, volume });
 }
 
+export async function playbackGetStatus(
+  deviceId: string,
+): Promise<import("$lib/types/playback").PlaybackStatusResponse> {
+  return invoke("playback_get_status", { deviceId });
+}
+
 // Local playback commands
 export async function playbackOpenInApp(
   torrentId: number,
@@ -171,8 +181,8 @@ export async function moveTorrentFiles(
 export async function torrentUpdateFiles(
   id: number,
   onlyFiles: number[],
-): Promise<void> {
-  return invoke("torrent_update_files", { id, onlyFiles });
+): Promise<TorrentAddedResponse> {
+  return invokeWithTimeout("torrent_update_files", { id, onlyFiles }, 60_000);
 }
 
 // Media commands
@@ -197,6 +207,10 @@ export async function subtitleSearchOpensubtitles(
 }
 
 // Automation commands
+export async function checkAutomationPermission(): Promise<string> {
+  return invoke("check_automation_permission");
+}
+
 export async function runShortcut(name: string, inputJson: string): Promise<string> {
   return invoke("run_shortcut", { name, inputJson });
 }
@@ -212,6 +226,29 @@ export async function runShellCommand(command: string): Promise<string> {
 // Rename commands
 export async function renameTorrentFiles(torrentId: number, renames: [number, string][]): Promise<void> {
   return invoke("torrent_rename_files", { torrentId, renames });
+}
+
+// Association commands
+export interface FileAssociationStatus {
+  torrent_files: boolean;
+  magnet_links: boolean;
+}
+
+export async function checkFileAssociations(): Promise<FileAssociationStatus> {
+  return invoke("check_file_associations");
+}
+
+export async function setDefaultForTorrents(): Promise<void> {
+  return invoke("set_default_for_torrents");
+}
+
+export async function setDefaultForMagnets(): Promise<void> {
+  return invoke("set_default_for_magnets");
+}
+
+// App launch commands
+export async function checkOpenedViaUrl(): Promise<boolean> {
+  return invoke("check_opened_via_url");
 }
 
 // Settings commands

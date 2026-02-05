@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 use tauri::{AppHandle, State};
 use tauri_plugin_store::StoreExt;
 
@@ -59,6 +61,11 @@ pub async fn settings_update(
         }
     }
 
+    // Toggle tray icon visibility
+    if old_config.show_tray_icon != config.show_tray_icon {
+        crate::tray::set_visible(&app, config.show_tray_icon);
+    }
+
     // Persist to store
     if let Ok(store) = app.store(STORE_FILE) {
         if let Ok(value) = serde_json::to_value(&config) {
@@ -68,4 +75,9 @@ pub async fn settings_update(
     }
 
     Ok(config)
+}
+
+#[tauri::command]
+pub fn check_opened_via_url(state: State<'_, AppState>) -> bool {
+    state.opened_via_url.load(Ordering::SeqCst)
 }

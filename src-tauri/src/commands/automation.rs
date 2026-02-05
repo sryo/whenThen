@@ -6,6 +6,34 @@ use crate::errors::{Result, WhenThenError};
 
 const TIMEOUT: Duration = Duration::from_secs(120);
 
+/// Runs a trivial AppleScript targeting System Events to trigger the macOS Automation permission prompt.
+#[tauri::command]
+pub async fn check_automation_permission() -> Result<String> {
+    let output = tokio::process::Command::new("osascript")
+        .args(["-e", "tell application \"System Events\" to return 1"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .await
+        .map_err(|e| WhenThenError::Internal(format!("Failed to spawn osascript: {e}")))?;
+
+    if output.status.success() {
+        Ok("granted".into())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("-10000") || stderr.contains("errAEEventNotPermitted") {
+            Err(WhenThenError::Internal(
+                "Automation permission required. Open System Settings > Privacy & Security > Automation and enable whenThen.".into(),
+            ))
+        } else {
+            let code = output.status.code().unwrap_or(-1);
+            Err(WhenThenError::Internal(format!(
+                "Automation check failed (exit {code}): {stderr}"
+            )))
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn run_shortcut(name: String, input_json: String) -> Result<String> {
     let mut child = tokio::process::Command::new("shortcuts")

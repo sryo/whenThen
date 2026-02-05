@@ -7,6 +7,8 @@
     Copy,
     ArrowUp,
     ArrowDown,
+    MonitorPlay,
+    Ellipsis,
   } from "lucide-svelte";
   import { playletsState } from "$lib/state/playlets.svelte";
   import type {
@@ -111,6 +113,18 @@
     const dir = await open({ directory: true, multiple: false });
     if (dir) {
       playletsState.updateAction<MoveAction>(playletId, action.id, { destination: dir as string });
+    }
+  }
+
+  async function pickCustomApp() {
+    const path = await open({
+      multiple: false,
+      filters: [{ name: "Applications", extensions: ["app"] }],
+      defaultPath: "/Applications",
+    });
+    if (path) {
+      const name = (path as string).split("/").pop()?.replace(/\.app$/, "") || (path as string);
+      playletsState.updateAction<PlayAction>(playletId, action.id, { app: name });
     }
   }
 
@@ -248,16 +262,34 @@
           System notification
         </span>
       {:else if action.type === "play"}
-        <select
-          value={(action as PlayAction).app}
-          onchange={(e) => playletsState.updateAction<PlayAction>(playletId, action.id, { app: (e.target as HTMLSelectElement).value })}
-          class="h-8 w-full rounded-lg bg-black/20 px-2 text-sm text-white/90 outline-none"
-        >
-          <option value="" class="text-[var(--color-text)] bg-[var(--color-bg)]">Pick an app...</option>
+        {@const currentApp = (action as PlayAction).app}
+        {@const isCustom = currentApp && !mediaPlayers.some((p) => p.name === currentApp)}
+        <div class="grid grid-cols-2 gap-2">
           {#each mediaPlayers as player}
-            <option value={player.name} class="text-[var(--color-text)] bg-[var(--color-bg)]">{player.name}</option>
+            <button
+              onclick={() => playletsState.updateAction<PlayAction>(playletId, action.id, { app: player.name })}
+              class="flex items-center gap-2 truncate rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80 {currentApp === player.name ? 'bg-white/25 text-white' : 'bg-black/20 text-white/70'}"
+            >
+              <MonitorPlay class="h-4 w-4 shrink-0" />
+              {player.name}
+            </button>
           {/each}
-        </select>
+          {#if isCustom}
+            <button
+              class="flex items-center gap-2 truncate rounded-lg px-3 py-2 text-sm font-medium bg-white/25 text-white"
+            >
+              <MonitorPlay class="h-4 w-4 shrink-0" />
+              {currentApp}
+            </button>
+          {/if}
+          <button
+            onclick={pickCustomApp}
+            class="flex items-center gap-2 truncate rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80 bg-black/20 text-white/70"
+          >
+            <Ellipsis class="h-4 w-4 shrink-0" />
+            Other
+          </button>
+        </div>
       {:else if action.type === "subtitle"}
         <input
           type="text"

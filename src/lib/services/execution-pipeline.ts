@@ -26,44 +26,50 @@ import {
   runApplescript,
   runShellCommand,
   torrentDelete,
+  checkAutomationPermission,
 } from "./tauri-commands";
 import { registerExecutor, getExecutor } from "./execution-registry";
+
+class SkipError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SkipError";
+  }
+}
 
 // Register all built-in executors
 
 registerExecutor("cast", async (action, torrentId, torrentName, files) => {
   const castAction = action as CastAction;
-  const deviceId = castAction.deviceId;
+  let deviceId = castAction.deviceId;
+
   if (!deviceId) {
-    const connected = devicesState.connectedDevices;
-    if (connected.length === 0) {
-      throw new Error("No device connected");
+    const fallback = settingsState.settings.default_cast_device;
+    if (fallback) {
+      deviceId = fallback;
+    } else {
+      const connected = devicesState.connectedDevices;
+      if (connected.length > 0) {
+        deviceId = connected[0].id;
+      } else {
+        throw new SkipError("No cast device");
+      }
     }
-    const device = connected[0];
-    const playable = files.find((f) => f.is_playable);
-    if (!playable) {
-      throw new Error("No playable files");
-    }
-    await playbackCastTorrent(device.id, torrentId, playable.index);
-    playbackState.setContext(torrentName, device.name);
-    return;
   }
 
   const playable = files.find((f) => f.is_playable);
-  if (!playable) {
-    throw new Error("No playable files");
-  }
+  if (!playable) throw new Error("No playable files");
+
   await playbackCastTorrent(deviceId, torrentId, playable.index);
   const device = devicesState.devices.find((d) => d.id === deviceId);
-  playbackState.setContext(torrentName, device?.name ?? deviceId);
+  playbackState.setContext(torrentName, device?.name ?? deviceId, torrentId, playable.index);
 });
 
 registerExecutor("move", async (action, torrentId) => {
   const moveAction = action as MoveAction;
-  if (!moveAction.destination) {
-    throw new Error("No destination folder set");
-  }
-  await moveTorrentFiles(torrentId, moveAction.destination);
+  const destination = moveAction.destination || settingsState.settings.default_move_destination;
+  if (!destination) throw new SkipError("No destination folder");
+  await moveTorrentFiles(torrentId, destination);
 });
 
 registerExecutor("notify", async (_action, _torrentId, torrentName) => {
@@ -82,14 +88,11 @@ registerExecutor("notify", async (_action, _torrentId, torrentName) => {
 
 registerExecutor("play", async (action, torrentId, _torrentName, files) => {
   const playAction = action as PlayAction;
-  if (!playAction.app) {
-    throw new Error("No app set");
-  }
+  const app = playAction.app || settingsState.settings.default_media_player;
+  if (!app) throw new SkipError("No media player");
   const playable = files.find((f) => f.is_playable);
-  if (!playable) {
-    throw new Error("No playable files");
-  }
-  await playbackOpenInApp(torrentId, playable.index, playAction.app);
+  if (!playable) throw new Error("No playable files");
+  await playbackOpenInApp(torrentId, playable.index, app);
 });
 
 registerExecutor("subtitle", async (action, torrentId, _torrentName, files) => {
@@ -132,6 +135,7 @@ registerExecutor("automation", async (action, torrentId, torrentName, files) => 
     }
     case "applescript": {
       if (!autoAction.script) throw new Error("No AppleScript set");
+      await checkAutomationPermission();
       const escape = (s: string) =>
         s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r");
       const cleanName = cleanTorrentName(torrentName);
@@ -257,9 +261,13 @@ export async function executePipeline(taskId: string): Promise<void> {
       await executor(action, task.torrentId, task.torrentName, filteredFiles);
       tasksState.markActionDone(taskId, actionResult.actionId);
     } catch (err: any) {
-      const errorMsg = err?.message || String(err);
-      tasksState.markActionFailed(taskId, actionResult.actionId, errorMsg);
-      hasFailed = true;
+      if (err instanceof SkipError) {
+        tasksState.markActionSkipped(taskId, actionResult.actionId, err.message);
+      } else {
+        const errorMsg = err?.message || String(err);
+        tasksState.markActionFailed(taskId, actionResult.actionId, errorMsg);
+        hasFailed = true;
+      }
     }
   }
 

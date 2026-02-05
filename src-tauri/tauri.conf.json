@@ -10,17 +10,34 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "whenThen",
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "decorations": true,
+        "visible": false,
         "width": 800,
         "height": 600,
         "minWidth": 360,
         "minHeight": 480,
         "resizable": true,
+        "dragDropEnabled": false
+      },
+      {
+        "label": "tray-panel",
+        "url": "index.html?panel=tray",
+        "title": "whenThen Panel",
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "transparent": true,
+        "shadow": true,
+        "visible": false,
+        "width": 320,
+        "height": 400,
         "dragDropEnabled": false
       }
     ],
@@ -37,13 +54,6 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ],
-    "fileAssociations": [
-      {
-        "ext": ["torrent"],
-        "mimeType": "application/x-bittorrent",
-        "description": "BitTorrent file"
-      }
     ]
   },
   "plugins": {

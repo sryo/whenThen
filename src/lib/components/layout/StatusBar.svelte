@@ -1,7 +1,6 @@
 <script lang="ts">
   import {
     ArrowDown,
-    ArrowUp,
     Users,
     Play,
     Pause,
@@ -275,10 +274,6 @@
         {formatSpeed(torrentsState.totalDownloadSpeed)}
       </span>
       <span class="flex items-center gap-1">
-        <ArrowUp class="h-3 w-3" />
-        {formatSpeed(torrentsState.totalUploadSpeed)}
-      </span>
-      <span class="flex items-center gap-1">
         <Users class="h-3 w-3" />
         {torrentsState.totalPeers} connected
       </span>
@@ -296,7 +291,8 @@
       {:else}
         <span class="flex items-center gap-1">
           <span class="h-1.5 w-1.5 rounded-full bg-[var(--color-text-muted)]"></span>
-          No device
+          <Monitor class="h-3 w-3" />
+          No cast device
         </span>
       {/if}
     </div>

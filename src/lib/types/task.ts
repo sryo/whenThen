@@ -10,6 +10,7 @@ export interface ActionResult {
   startedAt: string | null;
   completedAt: string | null;
   error: string | null;
+  skipReason: string | null;
 }
 
 export interface Task {

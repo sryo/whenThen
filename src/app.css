@@ -47,6 +47,13 @@ body,
   overflow: hidden;
 }
 
+/* Panel windows (tray, picker) need fully transparent backgrounds for rounded corners */
+html.panel-window,
+html.panel-window body,
+html.panel-window #app {
+  background-color: transparent !important;
+}
+
 body {
   background-color: var(--color-bg);
   color: var(--color-text);

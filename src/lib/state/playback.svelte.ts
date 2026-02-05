@@ -7,6 +7,8 @@ let status = $state<PlaybackStatusResponse | null>(null);
 let isLoading = $state(false);
 let activeTorrentName = $state<string | null>(null);
 let activeDeviceName = $state<string | null>(null);
+let activeTorrentId = $state<number | null>(null);
+let activeFileIndex = $state<number | null>(null);
 
 export const playbackState = {
   get status() {
@@ -42,6 +44,12 @@ export const playbackState = {
   get activeDeviceName() {
     return activeDeviceName;
   },
+  get activeTorrentId() {
+    return activeTorrentId;
+  },
+  get activeFileIndex() {
+    return activeFileIndex;
+  },
 
   setStatus(newStatus: PlaybackStatusResponse) {
     status = newStatus;
@@ -51,9 +59,11 @@ export const playbackState = {
     isLoading = value;
   },
 
-  setContext(torrentName: string | null, deviceName: string | null) {
+  setContext(torrentName: string | null, deviceName: string | null, torrentId?: number | null, fileIndex?: number | null) {
     activeTorrentName = torrentName;
     activeDeviceName = deviceName;
+    if (torrentId !== undefined) activeTorrentId = torrentId;
+    if (fileIndex !== undefined) activeFileIndex = fileIndex;
   },
 
   clear() {
@@ -61,5 +71,7 @@ export const playbackState = {
     isLoading = false;
     activeTorrentName = null;
     activeDeviceName = null;
+    activeTorrentId = null;
+    activeFileIndex = null;
   },
 };

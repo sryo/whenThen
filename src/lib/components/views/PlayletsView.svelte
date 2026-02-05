@@ -1,19 +1,7 @@
 <script lang="ts">
   import type { Component } from "svelte";
-  import type { IconType } from "$lib/types/ui";
   import {
     Plus,
-    Link,
-    Filter,
-    Files,
-    FileVideo,
-    Music,
-    FileCode,
-    CircleCheck,
-    FileSearch,
-    ArrowUpDown,
-    Captions,
-    FolderSearch,
     Copy,
     Trash2,
     ToggleLeft,
@@ -24,138 +12,19 @@
   import ContextMenu from "$lib/components/common/ContextMenu.svelte";
   import { useContextMenu } from "$lib/utils";
   import type { ContextMenuEntry } from "$lib/types/ui";
-  import type { Playlet, TriggerType } from "$lib/types/playlet";
-  import type { FileFilterCategory } from "$lib/types/playlet";
+  import type { Playlet } from "$lib/types/playlet";
   import { tasksState } from "$lib/state/tasks.svelte";
   import { uiState } from "$lib/state/ui.svelte";
   import { handleDroppedContent, handleDroppedFile } from "$lib/services/drag-drop";
   import { assignTorrentToPlaylet, beginManualDrop } from "$lib/services/playlet-assignment";
   import PlayletEditModal from "$lib/components/common/PlayletEditModal.svelte";
   import ActionBlock from "$lib/components/common/ActionBlock.svelte";
-  import { getActionDef, getActionLabel } from "$lib/services/action-registry";
-  import { devicesState } from "$lib/state/devices.svelte";
   import { settingsState } from "$lib/state/settings.svelte";
   import type { Action } from "$lib/types/playlet";
   import { playletTemplates, createPlayletFromTemplate } from "$lib/services/playlet-templates";
   import type { PlayletTemplate } from "$lib/services/playlet-templates";
   import { flowConnector } from "$lib/utils/flow-connector";
-
-  const filterCategoryIcons: Record<FileFilterCategory, typeof Files> = {
-    all: Files,
-    video: FileVideo,
-    audio: Music,
-    subtitle: Captions,
-    custom: FileCode,
-  };
-
-  const triggerTypeIcons: Record<TriggerType, typeof Link> = {
-    torrent_added: Link,
-    download_complete: CircleCheck,
-    metadata_received: FileSearch,
-    seeding_ratio: ArrowUpDown,
-    folder_watch: FolderSearch,
-  };
-
-  interface TriggerIcon {
-    icon: IconType;
-    color: string;
-  }
-
-  function buildTriggerIcons(playlet: Playlet): TriggerIcon[] {
-    const triggerType = playlet.trigger?.type ?? "torrent_added";
-    const icons: TriggerIcon[] = [
-      { icon: triggerTypeIcons[triggerType] ?? Link, color: "var(--color-primary)" },
-    ];
-    if (playlet.conditions.length > 0) {
-      icons.push({ icon: Filter, color: "var(--color-info)" });
-    }
-    if (playlet.fileFilter) {
-      icons.push({ icon: filterCategoryIcons[playlet.fileFilter.category], color: "var(--color-accent)" });
-    }
-    return icons;
-  }
-
-  interface DetailPart {
-    text: string;
-    color: string;
-  }
-
-  function triggerDetails(playlet: Playlet): DetailPart[] {
-    const parts: DetailPart[] = [];
-
-    // Show trigger info if non-default
-    const triggerType = playlet.trigger?.type ?? "torrent_added";
-    if (triggerType === "download_complete") {
-      parts.push({ text: "complete", color: "var(--color-primary)" });
-    } else if (triggerType === "metadata_received") {
-      parts.push({ text: "metadata", color: "var(--color-primary)" });
-    } else if (triggerType === "seeding_ratio") {
-      const ratio = playlet.trigger.seedingRatio ?? 2.0;
-      parts.push({ text: `ratio ${ratio}`, color: "var(--color-primary)" });
-    } else if (triggerType === "folder_watch") {
-      if (playlet.trigger.watchFolder) {
-        const segments = playlet.trigger.watchFolder.replace(/\/+$/, "").split("/");
-        parts.push({ text: segments[segments.length - 1] || "folder", color: "var(--color-primary)" });
-      } else {
-        parts.push({ text: "folder", color: "var(--color-primary)" });
-      }
-    }
-
-    const vals = playlet.conditions
-      .filter((c) => {
-        if (c.field === "name") return c.value.trim();
-        return c.numericValue !== undefined;
-      })
-      .map((c) => {
-        if (c.field === "name") return c.value.trim();
-        if (c.field === "total_size") return `${c.numericValue}MB`;
-        return `${c.numericValue} files`;
-      });
-    if (vals.length > 0) {
-      const join = playlet.conditionLogic === "or" ? " | " : " & ";
-      parts.push({ text: vals.join(join), color: "var(--color-info)" });
-    }
-
-    if (playlet.fileFilter) {
-      let text = "";
-      switch (playlet.fileFilter.category) {
-        case "all": text = "any"; break;
-        case "video": text = "video"; break;
-        case "audio": text = "audio"; break;
-        case "subtitle": text = "subtitle"; break;
-        case "custom": {
-          const exts = playlet.fileFilter.customExtensions;
-          if (exts.length > 0) text = exts.join(", ");
-          break;
-        }
-      }
-      if (text) parts.push({ text, color: "var(--color-accent)" });
-    }
-
-    if (parts.length === 0) {
-      parts.push({ text: "any", color: "var(--color-text-muted)" });
-    }
-
-    return parts;
-  }
-
-  interface ActionBlock {
-    label: string;
-    color: string;
-    icon: IconType;
-  }
-
-  function buildActionBlocks(playlet: Playlet): ActionBlock[] {
-    return playlet.actions.map((action) => {
-      const def = getActionDef(action.type);
-      const configured = getActionLabel(action);
-      return {
-        label: configured ?? def?.label ?? action.type,
-        color: def?.color ?? "var(--color-text-muted)",
-        icon: def?.icon ?? Plus,
-      };
-    });
-  }
+  import { buildTriggerIcons, triggerDetails, buildActionBlocks } from "$lib/utils/playlet-display";
 
   // Convert a template to a pseudo-Playlet so we can reuse the block builders
   function templateAsPlaylet(t: PlayletTemplate): Playlet {
@@ -336,8 +205,8 @@
   }
 </script>
 
-<div class="mx-auto max-w-3xl p-6">
-  <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+<div class="mx-auto max-w-2xl p-6">
+  <div class="grid grid-cols-1 gap-3">
     {#each playletsState.playlets as playlet (playlet.id)}
       {@const triggerIcons = buildTriggerIcons(playlet)}
       {@const details = triggerDetails(playlet)}
@@ -386,7 +255,7 @@
           </div>
 
           <!-- Playlet name + task count -->
-          <div class="flex items-start justify-between gap-2 px-4 py-4">
+          <div class="flex items-center justify-between gap-2 px-4 py-4">
             <h3 class="text-base font-bold leading-snug text-[var(--color-text)]">
               {derivePlayletName(playlet)}
             </h3>

@@ -75,6 +75,15 @@ pub async fn torrent_resume(state: State<'_, AppState>, id: usize) -> Result<()>
 }
 
 #[tauri::command]
+pub async fn torrent_recheck(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+    id: usize,
+) -> Result<TorrentAddedResponse> {
+    torrent_engine::recheck_torrent(&state, &app_handle, id).await
+}
+
+#[tauri::command]
 pub async fn torrent_delete(
     state: State<'_, AppState>,
     id: usize,
@@ -85,11 +94,12 @@ pub async fn torrent_delete(
 
 #[tauri::command]
 pub async fn torrent_update_files(
+    app_handle: AppHandle,
     state: State<'_, AppState>,
     id: usize,
     only_files: Vec<usize>,
-) -> Result<()> {
-    torrent_engine::update_torrent_files(&state, id, only_files).await
+) -> Result<TorrentAddedResponse> {
+    torrent_engine::update_torrent_files(&state, &app_handle, id, only_files).await
 }
 
 #[tauri::command]

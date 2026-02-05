@@ -2,6 +2,7 @@ import { playletsState, derivePlayletName } from "$lib/state/playlets.svelte";
 import { tasksState } from "$lib/state/tasks.svelte";
 import { uiState } from "$lib/state/ui.svelte";
 import type { TorrentAddedResponse } from "$lib/types/torrent";
+import type { Playlet, TriggerType } from "$lib/types/playlet";
 
 // Counter for in-flight manual card drops. Incremented before the IPC call
 // so the torrent:added event handler (which fires before the IPC resolves)
@@ -20,6 +21,32 @@ export function shouldSkipAutoAssign(): boolean {
     return true;
   }
   return false;
+}
+
+/** Find the best-matching playlet for a torrent based on conditions and specificity. */
+export function findBestMatch(
+  torrentName: string,
+  triggerType: TriggerType = "torrent_added",
+  totalBytes?: number,
+  fileCount?: number,
+): Playlet | null {
+  const eligible = playletsState.playlets.filter(
+    (p) => p.enabled && p.trigger.type === triggerType,
+  );
+
+  let best: Playlet | null = null;
+  let bestScore = -1;
+
+  for (const p of eligible) {
+    if (!playletsState.matchesConditions(p, torrentName, totalBytes, fileCount)) continue;
+    const score = p.conditions.length + (p.fileFilter ? 1 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      best = p;
+    }
+  }
+
+  return best;
 }
 
 export function assignTorrentToPlaylet(

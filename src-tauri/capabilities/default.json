@@ -1,7 +1,7 @@
 {
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": ["main", "tray-panel", "picker"],
   "permissions": [
     "core:default",
     "dialog:default",
@@ -18,6 +18,10 @@
     "core:event:allow-listen",
     "core:event:allow-emit",
     "deep-link:default",
-    "core:window:allow-theme"
+    "core:window:allow-theme",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-center",
+    "core:window:allow-set-focus"
   ]
 }

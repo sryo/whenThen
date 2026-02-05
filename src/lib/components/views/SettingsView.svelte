@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Folder, X, Clipboard, FolderOpen, Trash2 } from "lucide-svelte";
+  import { Folder, X, Clipboard, FolderOpen, Trash2, Cast, MonitorPlay, FolderOutput } from "lucide-svelte";
   import { settingsState } from "$lib/state/settings.svelte";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
   import { open as openShell } from "@tauri-apps/plugin-shell";
@@ -8,6 +8,15 @@
   import { useContextMenu } from "$lib/utils";
   import { uiState } from "$lib/state/ui.svelte";
   import type { ContextMenuEntry } from "$lib/types/ui";
+  import {
+    checkFileAssociations,
+    setDefaultForTorrents,
+    setDefaultForMagnets,
+    listMediaPlayers,
+    type FileAssociationStatus,
+  } from "$lib/services/tauri-commands";
+  import { devicesState } from "$lib/state/devices.svelte";
+  import type { MediaPlayer } from "$lib/types/playback";
 
   async function pickDirectory() {
     const dir = await openDialog({ directory: true, multiple: false });
@@ -27,11 +36,11 @@
     settingsState.updateAndSave({ incomplete_directory: "" });
   }
 
-  function handleToggle(key: "always_on_top" | "auto_discover" | "enable_upnp" | "watch_folders_enabled") {
+  function handleToggle(key: "auto_discover" | "enable_upnp" | "watch_folders_enabled" | "auto_play_next") {
     settingsState.updateAndSave({ [key]: !settingsState.settings[key] });
   }
 
-  function handleNumber(key: "max_download_speed" | "max_upload_speed" | "media_server_port" | "listen_port" | "max_concurrent_tasks", e: Event) {
+  function handleNumber(key: "max_download_speed" | "max_upload_speed" | "media_server_port" | "listen_port" | "max_concurrent_tasks" | "picker_countdown_seconds", e: Event) {
     const value = parseInt((e.target as HTMLInputElement).value) || 0;
     settingsState.updateAndSave({ [key]: value });
   }
@@ -67,6 +76,65 @@
     const value = (e.target as HTMLInputElement).value;
     settingsState.updateAndSave({ opensubtitles_api_key: value });
   }
+
+  // File associations
+  let associations = $state<FileAssociationStatus>({ torrent_files: false, magnet_links: false });
+  let associationsLoading = $state(false);
+
+  async function loadAssociations() {
+    try {
+      associations = await checkFileAssociations();
+    } catch {
+      // Non-macOS or bundle not available
+    }
+  }
+
+  async function handleSetTorrentDefault() {
+    associationsLoading = true;
+    try {
+      await setDefaultForTorrents();
+      await loadAssociations();
+    } catch (e) {
+      uiState.addToast(String(e), "error");
+    } finally {
+      associationsLoading = false;
+    }
+  }
+
+  async function handleSetMagnetDefault() {
+    associationsLoading = true;
+    try {
+      await setDefaultForMagnets();
+      await loadAssociations();
+    } catch (e) {
+      uiState.addToast(String(e), "error");
+    } finally {
+      associationsLoading = false;
+    }
+  }
+
+  // Media players for default player picker
+  let mediaPlayers = $state<MediaPlayer[]>([]);
+
+  async function loadMediaPlayers() {
+    try {
+      mediaPlayers = await listMediaPlayers();
+    } catch {
+      // Not available on this platform
+    }
+  }
+
+  async function pickMoveDestination() {
+    const dir = await openDialog({ directory: true, multiple: false });
+    if (dir) {
+      await settingsState.updateAndSave({ default_move_destination: dir as string });
+    }
+  }
+
+  $effect(() => {
+    loadAssociations();
+    loadMediaPlayers();
+  });
 
   // Context menus for directory paths
   const dirCtx = useContextMenu<{ path: string; browse: () => void }>();
@@ -146,7 +214,7 @@
               class="flex h-10 items-center gap-2 rounded-lg bg-[var(--color-bg-tertiary)] px-3 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]"
             >
               <Folder class="h-4 w-4" />
-              Browse
+              Browse...
             </button>
           </div>
         </div>
@@ -174,7 +242,7 @@
               class="flex h-10 items-center gap-2 rounded-lg bg-[var(--color-bg-tertiary)] px-3 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]"
             >
               <Folder class="h-4 w-4" />
-              Browse
+              Browse...
             </button>
           </div>
           <p class="mt-1 text-xs text-[var(--color-text-muted)]">Files move to the download folder when done</p>
@@ -192,10 +260,46 @@
               placeholder="0 = no limit"
             />
           </div>
+          <div>
+            <label for="picker-countdown" class="mb-1 block text-sm text-[var(--color-text-secondary)]">Picker countdown (seconds)</label>
+            <input
+              id="picker-countdown"
+              type="number"
+              min="0"
+              value={settingsState.settings.picker_countdown_seconds}
+              onchange={(e) => handleNumber("picker_countdown_seconds", e)}
+              class={fieldClass}
+              placeholder="0 = no countdown"
+            />
+          </div>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-[var(--color-text-secondary)]">Auto-play next file</span>
+          <button
+            onclick={() => handleToggle("auto_play_next")}
+            class="relative h-6 w-11 rounded-full transition-colors {settingsState.settings.auto_play_next ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-bg-tertiary)]'}"
+            title="Auto-play next file"
+          >
+            <span
+              class="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform shadow-sm {settingsState.settings.auto_play_next ? 'translate-x-5' : ''}"
+            ></span>
+          </button>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-[var(--color-text-secondary)]">Show menu bar icon</span>
+          <button
+            onclick={() => settingsState.updateAndSave({ show_tray_icon: !settingsState.settings.show_tray_icon })}
+            class="relative h-6 w-11 rounded-full transition-colors {settingsState.settings.show_tray_icon ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-bg-tertiary)]'}"
+            title="Show menu bar icon"
+          >
+            <span
+              class="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform shadow-sm {settingsState.settings.show_tray_icon ? 'translate-x-5' : ''}"
+            ></span>
+          </button>
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label for="max-dl" class="mb-1 block text-sm text-[var(--color-text-secondary)]">Max download speed</label>
+            <label for="max-dl" class="mb-1 block text-sm text-[var(--color-text-secondary)]">Max download speed (KB/s)</label>
             <input
               id="max-dl"
               type="number"
@@ -207,7 +311,7 @@
             />
           </div>
           <div>
-            <label for="max-ul" class="mb-1 block text-sm text-[var(--color-text-secondary)]">Max upload speed</label>
+            <label for="max-ul" class="mb-1 block text-sm text-[var(--color-text-secondary)]">Max upload speed (KB/s)</label>
             <input
               id="max-ul"
               type="number"
@@ -219,41 +323,122 @@
             />
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Playlet Defaults -->
+    <div class="border-t border-[var(--color-border)] px-6 py-5">
+      <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Playlet Defaults</h3>
+      <p class="mb-4 text-xs text-[var(--color-text-muted)]">Fallback values when an action has no config set</p>
+      <div class="space-y-4">
         <div>
-          <label for="media-port" class="mb-1 block text-sm text-[var(--color-text-secondary)]">Streaming port</label>
-          <input
-            id="media-port"
-            type="number"
-            min="1024"
-            max="65535"
-            value={settingsState.settings.media_server_port}
-            onchange={(e) => handleNumber("media_server_port", e)}
+          <label for="default-cast" class="mb-1 flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)]">
+            <Cast class="h-3.5 w-3.5" />
+            Default cast device
+          </label>
+          <select
+            id="default-cast"
             class={fieldClass}
-          />
+            value={settingsState.settings.default_cast_device}
+            onchange={(e) => settingsState.updateAndSave({ default_cast_device: (e.target as HTMLSelectElement).value })}
+          >
+            <option value="">None</option>
+            {#each devicesState.devices as device}
+              <option value={device.id}>{device.name}</option>
+            {/each}
+          </select>
+        </div>
+        <div>
+          <label for="default-player" class="mb-1 flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)]">
+            <MonitorPlay class="h-3.5 w-3.5" />
+            Default media player
+          </label>
+          <select
+            id="default-player"
+            class={fieldClass}
+            value={settingsState.settings.default_media_player}
+            onchange={(e) => settingsState.updateAndSave({ default_media_player: (e.target as HTMLSelectElement).value })}
+          >
+            <option value="">None</option>
+            {#each mediaPlayers as player}
+              <option value={player.name}>{player.name}</option>
+            {/each}
+          </select>
+        </div>
+        <div>
+          <label for="default-move" class="mb-1 flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)]">
+            <FolderOutput class="h-3.5 w-3.5" />
+            Default move destination
+          </label>
+          <div class="flex gap-2">
+            <input
+              id="default-move"
+              type="text"
+              readonly
+              value={settingsState.settings.default_move_destination || "None"}
+              class="flex-1 {fieldClass} {!settingsState.settings.default_move_destination ? 'text-[var(--color-text-muted)]' : ''}"
+            />
+            {#if settingsState.settings.default_move_destination}
+              <button
+                onclick={() => settingsState.updateAndSave({ default_move_destination: "" })}
+                class="flex h-10 items-center gap-2 rounded-lg bg-[var(--color-bg-tertiary)] px-3 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]"
+              >
+                <X class="h-4 w-4" />
+              </button>
+            {/if}
+            <button
+              onclick={pickMoveDestination}
+              class="flex h-10 items-center gap-2 rounded-lg bg-[var(--color-bg-tertiary)] px-3 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]"
+            >
+              <Folder class="h-4 w-4" />
+              Browse...
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Torrents -->
+    <div class="border-t border-[var(--color-border)] px-6 py-5">
+      <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Torrents</h3>
+      <div class="space-y-4">
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-[var(--color-text-secondary)]">Default for .torrent files</span>
+          {#if associations.torrent_files}
+            <button disabled class="flex h-10 items-center rounded-lg bg-[var(--color-bg-tertiary)] px-3 text-sm text-[var(--color-text-muted)] opacity-50">Default</button>
+          {:else}
+            <button
+              onclick={handleSetTorrentDefault}
+              disabled={associationsLoading}
+              class="flex h-10 items-center rounded-lg bg-[var(--color-bg-tertiary)] px-3 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border)] disabled:opacity-50"
+            >
+              Make default
+            </button>
+          {/if}
         </div>
         <div class="flex items-center justify-between">
-          <span class="text-sm text-[var(--color-text-secondary)]">Find devices on your network</span>
-          <button
-            onclick={() => handleToggle("auto_discover")}
-            class="relative h-6 w-11 rounded-full transition-colors {settingsState.settings.auto_discover ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-bg-tertiary)]'}"
-            title="Find devices on your network"
-          >
-            <span
-              class="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform shadow-sm {settingsState.settings.auto_discover ? 'translate-x-5' : ''}"
-            ></span>
-          </button>
+          <span class="text-sm text-[var(--color-text-secondary)]">Default for magnet links</span>
+          {#if associations.magnet_links}
+            <button disabled class="flex h-10 items-center rounded-lg bg-[var(--color-bg-tertiary)] px-3 text-sm text-[var(--color-text-muted)] opacity-50">Default</button>
+          {:else}
+            <button
+              onclick={handleSetMagnetDefault}
+              disabled={associationsLoading}
+              class="flex h-10 items-center rounded-lg bg-[var(--color-bg-tertiary)] px-3 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border)] disabled:opacity-50"
+            >
+              Make default
+            </button>
+          {/if}
         </div>
-        <!-- TODO: always_on_top ~40% — toggle persists the setting but no
-             setAlwaysOnTop() Tauri API call to actually pin the window -->
         <div class="flex items-center justify-between">
-          <span class="text-sm text-[var(--color-text-secondary)]">Keep window in front</span>
+          <span class="text-sm text-[var(--color-text-secondary)]">Delete .torrent file after adding</span>
           <button
-            onclick={() => handleToggle("always_on_top")}
-            class="relative h-6 w-11 rounded-full transition-colors {settingsState.settings.always_on_top ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-bg-tertiary)]'}"
-            title="Keep window in front"
+            onclick={() => settingsState.updateAndSave({ delete_torrent_file_on_add: !settingsState.settings.delete_torrent_file_on_add })}
+            class="relative h-6 w-11 rounded-full transition-colors {settingsState.settings.delete_torrent_file_on_add ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-bg-tertiary)]'}"
+            title="Delete .torrent file after adding"
           >
             <span
-              class="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform shadow-sm {settingsState.settings.always_on_top ? 'translate-x-5' : ''}"
+              class="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform shadow-sm {settingsState.settings.delete_torrent_file_on_add ? 'translate-x-5' : ''}"
             ></span>
           </button>
         </div>
@@ -321,7 +506,19 @@
             onchange={(e) => handleNumber("listen_port", e)}
             class={fieldClass}
           />
-          <p class="mt-1 text-xs text-[var(--color-text-muted)]">Restart required to apply</p>
+          <p class="mt-1 text-xs text-[var(--color-text-muted)]">Restart required</p>
+        </div>
+        <div>
+          <label for="media-port" class="mb-1 block text-sm text-[var(--color-text-secondary)]">Streaming port</label>
+          <input
+            id="media-port"
+            type="number"
+            min="1024"
+            max="65535"
+            value={settingsState.settings.media_server_port}
+            onchange={(e) => handleNumber("media_server_port", e)}
+            class={fieldClass}
+          />
         </div>
         <div class="flex items-center justify-between">
           <div>
@@ -335,6 +532,18 @@
           >
             <span
               class="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform shadow-sm {settingsState.settings.enable_upnp ? 'translate-x-5' : ''}"
+            ></span>
+          </button>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-[var(--color-text-secondary)]">Find devices on your network</span>
+          <button
+            onclick={() => handleToggle("auto_discover")}
+            class="relative h-6 w-11 rounded-full transition-colors {settingsState.settings.auto_discover ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-bg-tertiary)]'}"
+            title="Find devices on your network"
+          >
+            <span
+              class="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform shadow-sm {settingsState.settings.auto_discover ? 'translate-x-5' : ''}"
             ></span>
           </button>
         </div>

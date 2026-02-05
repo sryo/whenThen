@@ -12,7 +12,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["macos-private-api", "tray-icon", "image-png"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-store = "2"
 tauri-plugin-shell = "2"
@@ -36,3 +36,4 @@ dirs = "6"
 tokio-util = { version = "0.7", features = ["io"] }
 reqwest = { version = "0.12", features = ["json"] }
 notify = "7"
+tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }

@@ -11,6 +11,7 @@
     FileX,
     Pause,
     Play,
+    ShieldCheck,
   } from "lucide-svelte";
   import { open } from "@tauri-apps/plugin-shell";
   import type { Task } from "$lib/types/task";
@@ -21,14 +22,20 @@
   import { playletsState, derivePlayletName } from "$lib/state/playlets.svelte";
   import { settingsState } from "$lib/state/settings.svelte";
   import { retryTask } from "$lib/services/execution-pipeline";
-  import { torrentDelete, torrentPause, torrentResume } from "$lib/services/tauri-commands";
+  import { torrentDelete, torrentPause, torrentResume, torrentRecheck } from "$lib/services/tauri-commands";
   import { formatProgress, formatBytes, formatSpeed } from "$lib/utils/format";
   import { getActionDef, getActionLabel } from "$lib/services/action-registry";
   import ActionBlock from "$lib/components/common/ActionBlock.svelte";
   import ContextMenu from "$lib/components/common/ContextMenu.svelte";
   import { useContextMenu } from "$lib/utils";
 
-  let { task }: { task: Task } = $props();
+  let {
+    task,
+    onShowFiles,
+  }: {
+    task: Task;
+    onShowFiles?: (task: Task) => void;
+  } = $props();
 
   const torrent = $derived(
     torrentsState.torrents.find((t) => t.id === task.torrentId),
@@ -37,7 +44,10 @@
   const statusLabel = $derived.by(() => {
     switch (task.status) {
       case "waiting": {
-        if (!torrent || torrent.state === "completed") return "Ready";
+        if (!torrent) return "Ready";
+        if (torrent.state === "completed") {
+          return torrent.upload_speed > 0 ? "Seeding" : "Complete";
+        }
         if (torrent.state === "initializing") {
           return torrent.total_bytes === 0 ? "Magnetizing" : "Checking";
         }
@@ -74,6 +84,10 @@
       items.push({ icon: Pause, label: "Pause", action: () => { if (torrent) torrentPause(torrent.id); } });
     } else if (isPaused) {
       items.push({ icon: Play, label: "Resume", action: () => { if (torrent) torrentResume(torrent.id); } });
+    }
+    if (torrent && task.status === "waiting") {
+      items.push({ icon: ShieldCheck, label: "Recheck", action: () => { torrentRecheck(torrent.id); } });
+      items.push({ icon: FolderOpen, label: "Files", action: () => { onShowFiles?.(task); } });
     }
     if (task.status === "failed") {
       items.push({ icon: RotateCcw, label: "Retry", action: () => retryTask(task.id) });
@@ -117,7 +131,12 @@
   }
 
   function handleOpenFolder() {
-    open(settingsState.downloadDirectory);
+    const incomplete = settingsState.settings.incomplete_directory;
+    const isActive = torrent && torrent.state !== "completed";
+    const base = isActive && incomplete ? incomplete : settingsState.downloadDirectory;
+    // Try opening the torrent's own folder; falls back to the base directory
+    const folder = base.endsWith("/") ? base + task.torrentName : base + "/" + task.torrentName;
+    open(folder).catch(() => open(base));
   }
 
   const eta = $derived.by(() => {
@@ -139,6 +158,7 @@
     value: string | null;
     status: "done" | "running" | "pending" | "failed" | "skipped";
     error: string | null;
+    skipReason: string | null;
   }
 
   // Look up the playlet to get configured action values
@@ -170,6 +190,7 @@
       value: null,
       status: dlStatus,
       error: null,
+      skipReason: null,
     };
 
     const actionSteps = task.actionResults.map((result) => {
@@ -183,6 +204,7 @@
         value: configured,
         status: result.status as StepInfo["status"],
         error: result.error,
+        skipReason: result.skipReason,
       };
     });
 
@@ -212,9 +234,11 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
-  class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-3"
+  class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-3 {torrent && task.status === 'waiting' ? 'cursor-pointer' : ''}"
   oncontextmenu={(e) => ctx.open(e)}
+  onclick={() => { if (torrent && task.status === "waiting") onShowFiles?.(task); }}
 >
   <!-- Header: torrent name + pipeline pips (right-aligned) -->
   <div class="flex items-center justify-between gap-2">
@@ -226,7 +250,7 @@
       <div class="relative shrink-0">
         {#if canReassign}
           <button
-            onclick={() => { showPlayletPicker = !showPlayletPicker; }}
+            onclick={(e) => { e.stopPropagation(); showPlayletPicker = !showPlayletPicker; }}
             class="flex items-center gap-y-1 rounded-lg px-1 py-0.5 transition-colors hover:bg-[var(--color-bg-tertiary)]/50"
           >
             {#each steps as step, i}
@@ -282,17 +306,17 @@
   </div>
 
   <!-- Download progress bar + controls -->
-  {#if torrent && task.status === "waiting" && torrent.state !== "completed"}
+  {#if torrent && task.status === "waiting"}
     <div class="mt-2 flex items-center gap-1.5">
       <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--color-bg-tertiary)]">
         <div
-          class="h-full rounded-full bg-[var(--color-primary)] transition-all"
+          class="h-full rounded-full transition-all {torrent.state === 'completed' ? 'bg-[var(--color-success)]' : 'bg-[var(--color-primary)]'}"
           style="width: {torrent.progress * 100}%"
         ></div>
       </div>
       {#if isDownloading}
         <button
-          onclick={handlePause}
+          onclick={(e) => { e.stopPropagation(); handlePause(); }}
           class="shrink-0 rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
           title="Pause"
         >
@@ -300,7 +324,7 @@
         </button>
       {:else if isPaused}
         <button
-          onclick={handleResume}
+          onclick={(e) => { e.stopPropagation(); handleResume(); }}
           class="shrink-0 rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
           title="Resume"
         >
@@ -308,7 +332,7 @@
         </button>
       {/if}
       <button
-        onclick={handleOpenFolder}
+        onclick={(e) => { e.stopPropagation(); handleOpenFolder(); }}
         class="shrink-0 rounded p-1 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
         title="Open folder"
       >
@@ -337,12 +361,17 @@
     </div>
   {/if}
 
-  <!-- Error messages for failed steps -->
+  <!-- Error/skip messages for failed/skipped steps -->
   {#if steps.length > 0}
     {#each steps as step}
       {#if step.status === "failed" && step.error}
         <p class="select-text mt-1.5 truncate text-xs text-[var(--color-error)]">
           {step.error}
+        </p>
+      {/if}
+      {#if step.status === "skipped" && step.skipReason}
+        <p class="mt-1.5 truncate text-xs text-[var(--color-warning)]">
+          {step.skipReason}
         </p>
       {/if}
     {/each}

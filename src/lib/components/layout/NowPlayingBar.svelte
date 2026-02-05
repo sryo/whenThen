@@ -15,14 +15,73 @@
     playbackSeek,
     playbackSeekRelative,
     playbackSetVolume,
+    playbackGetStatus,
+    playbackCastTorrent,
+    torrentFiles,
     chromecastDisconnect,
   } from "$lib/services/tauri-commands";
   import { formatDuration } from "$lib/utils";
   import { uiState } from "$lib/state/ui.svelte";
+  import { settingsState } from "$lib/state/settings.svelte";
 
   let volume = $state(1);
   let isSeeking = $state(false);
   let seekValue = $state(0);
+  let autoPlayingNext = $state(false);
+
+  // Poll playback status every 2s while active
+  $effect(() => {
+    const deviceId = playbackState.activeDeviceId;
+    if (!deviceId || playbackState.isIdle) return;
+
+    const interval = setInterval(async () => {
+      if (autoPlayingNext) return;
+      try {
+        const s = await playbackGetStatus(deviceId);
+        playbackState.setStatus(s);
+
+        if (s.state === "idle") {
+          clearInterval(interval);
+          await handlePlaybackEnded();
+        }
+      } catch {
+        // Device may have disconnected
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  });
+
+  async function handlePlaybackEnded() {
+    const tid = playbackState.activeTorrentId;
+    const idx = playbackState.activeFileIndex;
+    const deviceId = playbackState.activeDeviceId;
+
+    if (settingsState.settings.auto_play_next && tid != null && idx != null && deviceId) {
+      autoPlayingNext = true;
+      try {
+        const files = await torrentFiles(tid);
+        const playable = files.filter((f) => f.is_playable).sort((a, b) => a.index - b.index);
+        const next = playable.find((f) => f.index > idx);
+        if (next) {
+          await playbackCastTorrent(deviceId, tid, next.index);
+          playbackState.setContext(playbackState.activeTorrentName, playbackState.activeDeviceName, tid, next.index);
+          uiState.addToast(`Playing next: ${next.name}`, "success");
+        } else {
+          playbackState.clear();
+          uiState.addToast("Done playing", "success");
+        }
+      } catch {
+        playbackState.clear();
+        uiState.addToast("Done playing", "success");
+      } finally {
+        autoPlayingNext = false;
+      }
+    } else {
+      playbackState.clear();
+      uiState.addToast("Done playing", "success");
+    }
+  }
 
   async function handlePlayPause() {
     const deviceId = playbackState.activeDeviceId;

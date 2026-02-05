@@ -5,6 +5,7 @@
   import ActivityView from "$lib/components/views/ActivityView.svelte";
   import SettingsView from "$lib/components/views/SettingsView.svelte";
   import Toast from "$lib/components/common/Toast.svelte";
+  import TrayPanel from "$lib/components/common/TrayPanel.svelte";
   import PlayletPickerModal from "$lib/components/common/PlayletPickerModal.svelte";
   import { uiState } from "$lib/state/ui.svelte";
   import { settingsState } from "$lib/state/settings.svelte";
@@ -20,30 +21,45 @@
     cleanupTriggerWatcher,
   } from "$lib/services/trigger-watcher";
   import {
+    checkOpenedViaUrl,
     chromecastStartDiscovery,
     settingsGet,
     torrentSyncRestored,
   } from "$lib/services/tauri-commands";
+  import { findBestMatch, assignTorrentToPlaylet } from "$lib/services/playlet-assignment";
   import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+
+  const panelParam = new URLSearchParams(window.location.search).get("panel");
+  const isTrayPanel = panelParam === "tray";
+  const isPanel = isTrayPanel;
+
+  // Panel windows need transparent backgrounds for rounded corners
+  if (isPanel) {
+    document.documentElement.classList.add("panel-window");
+  }
 
   let contentEl: HTMLElement | undefined = $state();
   let resizeObserver: ResizeObserver | undefined;
 
-  // Trigger the .go class on the next frame after pip mounts
-  $effect(() => {
-    if (uiState.flyingPip) {
-      tick().then(() => {
-        requestAnimationFrame(() => {
-          document.querySelectorAll('.flying-pip-x, .flying-pip-y').forEach((el) => el.classList.add('go'));
+  // Panel windows handle their own lifecycle; skip main window setup
+  if (!isPanel) {
+    // Trigger the .go class on the next frame after pip mounts
+    $effect(() => {
+      if (uiState.flyingPip) {
+        tick().then(() => {
+          requestAnimationFrame(() => {
+            document.querySelectorAll('.flying-pip-x, .flying-pip-y').forEach((el) => el.classList.add('go'));
+          });
         });
-      });
-    }
-  });
+      }
+    });
+  }
 
   onMount(async () => {
-    await setupEventListeners();
-    await setupTriggerWatcher();
+    if (isPanel) return; // Panel components run their own init
 
+    // Load state before registering event listeners so handlers see
+    // the full playlet/task list (matters for cold-start via file association).
     await playletsState.loadPlaylets();
     await tasksState.loadTasks();
 
@@ -55,24 +71,56 @@
       settingsState.applyScheme();
     }
 
+    await setupEventListeners();
+    await setupTriggerWatcher();
+
     // Restore persisted torrents (retry until session is ready)
+    const hasPendingTasks = tasksState.activeTasks.length > 0;
     for (let attempt = 0; attempt < 20; attempt++) {
       try {
         const restored = await torrentSyncRestored();
         if (restored.length > 0) {
           torrentsState.setTorrents(restored);
+          break;
         }
-        break;
+        // Session returned empty — retry if tasks expect torrents
+        if (!hasPendingTasks) break;
+        await new Promise((r) => setTimeout(r, 500));
       } catch {
         await new Promise((r) => setTimeout(r, 500));
       }
+    }
+
+    // Auto-assign unmatched restored torrents to best-matching playlet
+    for (const torrent of torrentsState.torrents) {
+      if (tasksState.getByTorrentId(torrent.id)) continue;
+      const match = findBestMatch(
+        torrent.name,
+        "torrent_added",
+        torrent.total_bytes || undefined,
+        torrent.file_count || undefined,
+      );
+      if (match) {
+        assignTorrentToPlaylet(match.id, {
+          id: torrent.id,
+          name: torrent.name,
+          info_hash: torrent.info_hash,
+          files: [],
+        });
+      }
+    }
+
+    // Show main window unless the app was launched via file association
+    const openedViaUrl = await checkOpenedViaUrl();
+    if (!openedViaUrl) {
+      await getCurrentWindow().show();
+      await getCurrentWindow().setFocus();
     }
 
     if (settingsState.settings.auto_discover) {
       try {
         await chromecastStartDiscovery();
       } catch {}
-
     }
 
     // Suppress default WebView context menu (component menus use stopPropagation)
@@ -93,6 +141,7 @@
   });
 
   onDestroy(() => {
+    if (isPanel) return;
     cleanupEventListeners();
     cleanupTriggerWatcher();
     window.removeEventListener("contextmenu", suppressContextMenu);
@@ -116,10 +165,10 @@
 
     switch (e.key) {
       case "1":
-        uiState.setView("playlets");
+        uiState.setView("activity");
         break;
       case "2":
-        uiState.setView("activity");
+        uiState.setView("playlets");
         break;
       case "3":
         uiState.setView("settings");
@@ -128,51 +177,55 @@
   }
 </script>
 
-<div bind:this={contentEl} class="h-full">
-  <AppShell>
-    {#if uiState.activeView === "playlets"}
-      <PlayletsView />
-    {:else if uiState.activeView === "activity"}
-      <ActivityView />
-    {:else if uiState.activeView === "settings"}
-      <SettingsView />
-    {/if}
-  </AppShell>
-</div>
-
-<!-- Playlet picker modal -->
-{#if uiState.pendingTorrent}
-  <PlayletPickerModal />
-{/if}
-
-<!-- Toast notifications -->
-{#if uiState.toasts.length > 0}
-  <div class="fixed bottom-10 right-4 z-50 flex flex-col gap-2">
-    {#each uiState.toasts as toast (toast.id)}
-      <Toast {toast} />
-    {/each}
+{#if isTrayPanel}
+  <TrayPanel />
+{:else}
+  <div bind:this={contentEl} class="h-full">
+    <AppShell>
+      {#if uiState.activeView === "playlets"}
+        <PlayletsView />
+      {:else if uiState.activeView === "activity"}
+        <ActivityView />
+      {:else if uiState.activeView === "settings"}
+        <SettingsView />
+      {/if}
+    </AppShell>
   </div>
-{/if}
 
-<!-- Flying pip: animated dot from card to Activity badge -->
-{#if uiState.flyingPip}
-  {@const pip = uiState.flyingPip}
-  {@const dest = document.querySelector('[data-nav="activity"]')?.getBoundingClientRect()}
-  {#if dest}
-    {@const toX = dest.left + dest.width / 2}
-    {@const toY = dest.top + dest.height / 2}
-    <div
-      class="flying-pip-x"
-      style="left:{pip.fromX}px; top:0px; --dx:{toX - pip.fromX}px"
-      ontransitionend={() => uiState.clearFlyingPip()}
-    >
-      <div
-        class="flying-pip-y"
-        style="top:{pip.fromY}px; --dy:{toY - pip.fromY}px"
-      >
-        <div class="flying-pip-dot"></div>
-      </div>
+  <!-- Playlet picker modal -->
+  {#if uiState.pendingTorrent}
+    <PlayletPickerModal />
+  {/if}
+
+  <!-- Toast notifications -->
+  {#if uiState.toasts.length > 0}
+    <div class="fixed bottom-10 right-4 z-50 flex flex-col gap-2">
+      {#each uiState.toasts as toast (toast.id)}
+        <Toast {toast} />
+      {/each}
     </div>
+  {/if}
+
+  <!-- Flying pip: animated dot from card to Activity badge -->
+  {#if uiState.flyingPip}
+    {@const pip = uiState.flyingPip}
+    {@const dest = document.querySelector('[data-nav="activity"]')?.getBoundingClientRect()}
+    {#if dest}
+      {@const toX = dest.left + dest.width / 2}
+      {@const toY = dest.top + dest.height / 2}
+      <div
+        class="flying-pip-x"
+        style="left:{pip.fromX}px; top:0px; --dx:{toX - pip.fromX}px"
+        ontransitionend={() => uiState.clearFlyingPip()}
+      >
+        <div
+          class="flying-pip-y"
+          style="top:{pip.fromY}px; --dy:{toY - pip.fromY}px"
+        >
+          <div class="flying-pip-dot"></div>
+        </div>
+      </div>
+    {/if}
   {/if}
 {/if}
 

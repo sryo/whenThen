@@ -32,8 +32,6 @@ export const settingsState = {
     settings = { ...settings, [key]: value };
   },
 
-  // TODO: always_on_top ~40% — when partial includes always_on_top, call
-  // Tauri's setAlwaysOnTop() window API to actually pin/unpin the window.
   async updateAndSave(partial: Partial<AppSettings>) {
     settings = { ...settings, ...partial };
     if (partial.color_scheme !== undefined) {

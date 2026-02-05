@@ -4,7 +4,7 @@ import type { TorrentAddedResponse } from "$lib/types/torrent";
 
 export type { ViewName, Toast };
 
-let activeView = $state<ViewName>("playlets");
+let activeView = $state<ViewName>("activity");
 let toasts = $state<Toast[]>([]);
 let pendingTorrent = $state<TorrentAddedResponse | null>(null);
 let flyingPip = $state<{ id: string; fromX: number; fromY: number } | null>(null);

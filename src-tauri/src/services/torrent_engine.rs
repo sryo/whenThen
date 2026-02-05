@@ -211,9 +211,9 @@ pub async fn add_magnet(
         .await
         .map_err(|e| WhenThenError::Torrent(format!("Failed to add magnet: {e}")))?;
 
-    let handle = match response {
-        AddTorrentResponse::Added(_, handle) => handle,
-        AddTorrentResponse::AlreadyManaged(_, handle) => handle,
+    let (handle, is_new) = match response {
+        AddTorrentResponse::Added(_, handle) => (handle, true),
+        AddTorrentResponse::AlreadyManaged(_, handle) => (handle, false),
         AddTorrentResponse::ListOnly(_) => {
             return Err(WhenThenError::Torrent("Torrent added in list-only mode".into()));
         }
@@ -229,8 +229,6 @@ pub async fn add_magnet(
     let local_ip = get_local_ip();
     let files = build_file_list(&handle, &local_ip, media_server_port);
 
-    spawn_progress_emitter(state, app_handle.clone(), id);
-
     let result = TorrentAddedResponse {
         id,
         name,
@@ -238,9 +236,14 @@ pub async fn add_magnet(
         files,
     };
 
-    app_handle
-        .emit("torrent:added", &result)
-        .unwrap_or_default();
+    if is_new {
+        spawn_progress_emitter(state, app_handle.clone(), id);
+        app_handle
+            .emit("torrent:added", &result)
+            .unwrap_or_default();
+    } else {
+        info!(id, "Torrent already managed, skipping torrent:added event");
+    }
 
     Ok(result)
 }
@@ -289,9 +292,9 @@ pub async fn add_torrent_file(
         .await
         .map_err(|e| WhenThenError::Torrent(format!("Failed to add torrent: {e}")))?;
 
-    let handle = match response {
-        AddTorrentResponse::Added(_, handle) => handle,
-        AddTorrentResponse::AlreadyManaged(_, handle) => handle,
+    let (handle, is_new) = match response {
+        AddTorrentResponse::Added(_, handle) => (handle, true),
+        AddTorrentResponse::AlreadyManaged(_, handle) => (handle, false),
         AddTorrentResponse::ListOnly(_) => {
             return Err(WhenThenError::Torrent("Torrent added in list-only mode".into()));
         }
@@ -307,8 +310,6 @@ pub async fn add_torrent_file(
     let local_ip = get_local_ip();
     let files = build_file_list(&handle, &local_ip, media_server_port);
 
-    spawn_progress_emitter(state, app_handle.clone(), id);
-
     let result = TorrentAddedResponse {
         id,
         name,
@@ -316,9 +317,20 @@ pub async fn add_torrent_file(
         files,
     };
 
-    app_handle
-        .emit("torrent:added", &result)
-        .unwrap_or_default();
+    if is_new {
+        spawn_progress_emitter(state, app_handle.clone(), id);
+        app_handle
+            .emit("torrent:added", &result)
+            .unwrap_or_default();
+    } else {
+        info!(id, "Torrent already managed, skipping torrent:added event");
+    }
+
+    // Delete source .torrent file if configured
+    let should_delete = state.config.read().await.delete_torrent_file_on_add;
+    if should_delete {
+        let _ = std::fs::remove_file(&path);
+    }
 
     Ok(result)
 }
@@ -365,9 +377,9 @@ pub async fn add_torrent_bytes(
         .await
         .map_err(|e| WhenThenError::Torrent(format!("Failed to add torrent: {e}")))?;
 
-    let handle = match response {
-        AddTorrentResponse::Added(_, handle) => handle,
-        AddTorrentResponse::AlreadyManaged(_, handle) => handle,
+    let (handle, is_new) = match response {
+        AddTorrentResponse::Added(_, handle) => (handle, true),
+        AddTorrentResponse::AlreadyManaged(_, handle) => (handle, false),
         AddTorrentResponse::ListOnly(_) => {
             return Err(WhenThenError::Torrent("Torrent added in list-only mode".into()));
         }
@@ -383,8 +395,6 @@ pub async fn add_torrent_bytes(
     let local_ip = get_local_ip();
     let files = build_file_list(&handle, &local_ip, media_server_port);
 
-    spawn_progress_emitter(state, app_handle.clone(), id);
-
     let result = TorrentAddedResponse {
         id,
         name,
@@ -392,9 +402,14 @@ pub async fn add_torrent_bytes(
         files,
     };
 
-    app_handle
-        .emit("torrent:added", &result)
-        .unwrap_or_default();
+    if is_new {
+        spawn_progress_emitter(state, app_handle.clone(), id);
+        app_handle
+            .emit("torrent:added", &result)
+            .unwrap_or_default();
+    } else {
+        info!(id, "Torrent already managed, skipping torrent:added event");
+    }
 
     Ok(result)
 }
@@ -585,6 +600,94 @@ pub async fn resume_torrent(state: &AppState, id: usize) -> Result<()> {
     session.unpause(&handle).await
         .map_err(|e| WhenThenError::Torrent(format!("Failed to resume: {e}")))?;
     Ok(())
+}
+
+/// Delete + re-add a torrent to force piece re-verification.
+pub async fn recheck_torrent(
+    state: &AppState,
+    app_handle: &AppHandle,
+    id: usize,
+) -> Result<TorrentAddedResponse> {
+    let session = {
+        let guard = state.torrent_session.read().await;
+        guard.as_ref().ok_or_else(|| {
+            WhenThenError::Torrent("Torrent session not initialized".into())
+        })?.clone()
+    };
+
+    let handle = session
+        .get(librqbit::api::TorrentIdOrHash::Id(id))
+        .ok_or(WhenThenError::TorrentNotFound(id))?;
+
+    // Capture torrent bytes and metadata before deleting
+    let torrent_bytes = handle
+        .with_metadata(|m| m.torrent_bytes.clone())
+        .map_err(|e| WhenThenError::Torrent(format!("Cannot read torrent metadata: {e}")))?;
+
+    let name = handle.name().unwrap_or_else(|| "Unknown".to_string());
+
+    // Delete from session, keep files on disk
+    session
+        .delete(librqbit::api::TorrentIdOrHash::Id(id), false)
+        .await
+        .map_err(|e| WhenThenError::Torrent(format!("Failed to delete torrent for recheck: {e}")))?;
+
+    state.torrent_names.write().await.remove(&id);
+
+    // Re-add with same bytes — librqbit will hash-check all pieces on init
+    let add_opts = AddTorrentOptions {
+        overwrite: true,
+        ..Default::default()
+    };
+
+    let response = session
+        .add_torrent(
+            AddTorrent::TorrentFileBytes(torrent_bytes),
+            Some(add_opts),
+        )
+        .await
+        .map_err(|e| WhenThenError::Torrent(format!("Failed to re-add torrent for recheck: {e}")))?;
+
+    let new_handle = match response {
+        AddTorrentResponse::Added(_, h) => h,
+        AddTorrentResponse::AlreadyManaged(_, h) => h,
+        AddTorrentResponse::ListOnly(_) => {
+            return Err(WhenThenError::Torrent("Torrent re-added in list-only mode".into()));
+        }
+    };
+
+    let new_id = new_handle.id();
+    let info_hash = new_handle.info_hash().as_string();
+
+    state.torrent_names.write().await.insert(new_id, name.clone());
+
+    let media_server_port = state.media_server.port;
+    let local_ip = get_local_ip();
+    let files = build_file_list(&new_handle, &local_ip, media_server_port);
+
+    let result = TorrentAddedResponse {
+        id: new_id,
+        name: name.clone(),
+        info_hash,
+        files,
+    };
+
+    spawn_progress_emitter(state, app_handle.clone(), new_id);
+
+    #[derive(serde::Serialize, Clone)]
+    struct TorrentRechecked {
+        old_id: usize,
+        new_id: usize,
+        name: String,
+    }
+
+    app_handle
+        .emit("torrent:rechecked", &TorrentRechecked { old_id: id, new_id, name })
+        .unwrap_or_default();
+
+    info!(old_id = id, new_id, "Torrent rechecked");
+
+    Ok(result)
 }
 
 pub async fn delete_torrent(state: &AppState, id: usize, delete_files: bool) -> Result<()> {
@@ -897,7 +1000,17 @@ pub async fn rename_torrent_files(state: &AppState, torrent_id: usize, renames: 
     Ok(())
 }
 
-pub async fn update_torrent_files(state: &AppState, id: usize, only_files: Vec<usize>) -> Result<()> {
+/// Delete + re-add a torrent with a new file selection.
+pub async fn update_torrent_files(
+    state: &AppState,
+    app_handle: &AppHandle,
+    id: usize,
+    only_files: Vec<usize>,
+) -> Result<TorrentAddedResponse> {
+    if only_files.is_empty() {
+        return Err(WhenThenError::Torrent("Cannot deselect all files".into()));
+    }
+
     let session = {
         let guard = state.torrent_session.read().await;
         guard.as_ref().ok_or_else(|| {
@@ -905,16 +1018,77 @@ pub async fn update_torrent_files(state: &AppState, id: usize, only_files: Vec<u
         })?.clone()
     };
 
-    let _handle = session
+    let handle = session
         .get(librqbit::api::TorrentIdOrHash::Id(id))
         .ok_or(WhenThenError::TorrentNotFound(id))?;
 
-    // librqbit doesn't support updating file selection on an active torrent.
-    // Would require delete + re-add with new selection.
-    info!("File selection update requested for torrent {}: {:?} (not supported by backend)", id, only_files);
-    Err(WhenThenError::Torrent(
-        "Changing file selection on an active torrent is not yet supported. Remove and re-add the torrent with the desired files.".into()
-    ))
+    let torrent_bytes = handle
+        .with_metadata(|m| m.torrent_bytes.clone())
+        .map_err(|e| WhenThenError::Torrent(format!("Cannot read torrent metadata: {e}")))?;
+
+    let name = handle.name().unwrap_or_else(|| "Unknown".to_string());
+
+    session
+        .delete(librqbit::api::TorrentIdOrHash::Id(id), false)
+        .await
+        .map_err(|e| WhenThenError::Torrent(format!("Failed to delete torrent for file update: {e}")))?;
+
+    state.torrent_names.write().await.remove(&id);
+
+    let add_opts = AddTorrentOptions {
+        only_files: Some(only_files.into_iter().collect()),
+        overwrite: true,
+        ..Default::default()
+    };
+
+    let response = session
+        .add_torrent(
+            AddTorrent::TorrentFileBytes(torrent_bytes),
+            Some(add_opts),
+        )
+        .await
+        .map_err(|e| WhenThenError::Torrent(format!("Failed to re-add torrent with new file selection: {e}")))?;
+
+    let new_handle = match response {
+        AddTorrentResponse::Added(_, h) => h,
+        AddTorrentResponse::AlreadyManaged(_, h) => h,
+        AddTorrentResponse::ListOnly(_) => {
+            return Err(WhenThenError::Torrent("Torrent re-added in list-only mode".into()));
+        }
+    };
+
+    let new_id = new_handle.id();
+    let info_hash = new_handle.info_hash().as_string();
+
+    state.torrent_names.write().await.insert(new_id, name.clone());
+
+    let media_server_port = state.media_server.port;
+    let local_ip = get_local_ip();
+    let files = build_file_list(&new_handle, &local_ip, media_server_port);
+
+    let result = TorrentAddedResponse {
+        id: new_id,
+        name: name.clone(),
+        info_hash,
+        files,
+    };
+
+    spawn_progress_emitter(state, app_handle.clone(), new_id);
+
+    #[derive(serde::Serialize, Clone)]
+    struct TorrentFilesUpdated {
+        old_id: usize,
+        new_id: usize,
+        name: String,
+    }
+
+    app_handle
+        .emit("torrent:files-updated", &TorrentFilesUpdated { old_id: id, new_id, name })
+        .unwrap_or_default();
+
+    info!(old_id = id, new_id, "Torrent file selection updated");
+
+    Ok(result)
 }
 
 pub fn get_local_ip() -> String {

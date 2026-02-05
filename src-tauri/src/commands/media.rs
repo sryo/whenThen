@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use serde::Serialize;
 use tauri::State;
 
@@ -74,26 +72,208 @@ pub async fn subtitle_search_opensubtitles(
 
 #[tauri::command]
 pub async fn list_media_players() -> Result<Vec<MediaPlayer>> {
-    let known_apps = [
-        ("vlc", "VLC", "VLC.app"),
-        ("iina", "IINA", "IINA.app"),
-        ("mpv", "mpv", "mpv.app"),
-        ("infuse", "Infuse", "Infuse 7.app"),
-        ("elmedia", "Elmedia Player", "Elmedia Player.app"),
-        ("quicktime", "QuickTime Player", "QuickTime Player.app"),
-    ];
+    #[cfg(target_os = "macos")]
+    {
+        Ok(launch_services::discover_media_players())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(Vec::new())
+    }
+}
 
-    let mut players = Vec::new();
-    for (id, name, bundle) in &known_apps {
-        let app_path = Path::new("/Applications").join(bundle);
-        if app_path.exists() {
-            players.push(MediaPlayer {
-                id: id.to_string(),
-                name: name.to_string(),
-                path: app_path.to_string_lossy().to_string(),
-            });
+#[cfg(target_os = "macos")]
+mod launch_services {
+    use super::MediaPlayer;
+    use std::collections::BTreeSet;
+    use std::os::raw::c_void;
+
+    type CFTypeRef = *const c_void;
+    type CFAllocatorRef = *const c_void;
+    type CFArrayRef = *const c_void;
+    type CFStringRef = *const c_void;
+    type CFURLRef = *const c_void;
+    type CFErrorRef = *const c_void;
+    type CFIndex = isize;
+    type Boolean = u8;
+
+    type LSRolesMask = u32;
+    // kLSRolesAll = 0xFFFFFFFF — matches any role (viewer, editor, etc.)
+    const K_LS_ROLES_ALL: LSRolesMask = 0xFFFFFFFF;
+
+    // kCFStringEncodingUTF8 = 0x08000100
+    const K_CF_STRING_ENCODING_UTF8: u32 = 0x08000100;
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    extern "C" {
+        static kCFAllocatorDefault: CFAllocatorRef;
+
+        fn CFStringCreateWithBytes(
+            alloc: CFAllocatorRef,
+            bytes: *const u8,
+            num_bytes: CFIndex,
+            encoding: u32,
+            is_external: Boolean,
+        ) -> CFStringRef;
+        fn CFStringGetCString(
+            s: CFStringRef,
+            buffer: *mut u8,
+            buffer_size: CFIndex,
+            encoding: u32,
+        ) -> Boolean;
+        fn CFStringGetLength(s: CFStringRef) -> CFIndex;
+        fn CFArrayGetCount(arr: CFArrayRef) -> CFIndex;
+        fn CFArrayGetValueAtIndex(arr: CFArrayRef, idx: CFIndex) -> *const c_void;
+        fn CFURLGetFileSystemRepresentation(
+            url: CFURLRef,
+            resolve_against_base: Boolean,
+            buffer: *mut u8,
+            max_buf_len: CFIndex,
+        ) -> Boolean;
+        fn CFRelease(cf: CFTypeRef);
+    }
+
+    #[link(name = "CoreServices", kind = "framework")]
+    extern "C" {
+        fn LSCopyAllRoleHandlersForContentType(
+            content_type: CFStringRef,
+            role: LSRolesMask,
+        ) -> CFArrayRef;
+        fn LSCopyApplicationURLsForBundleIdentifier(
+            bundle_id: CFStringRef,
+            out_error: *mut CFErrorRef,
+        ) -> CFArrayRef;
+    }
+
+    unsafe fn cfstring_from_str(s: &str) -> CFStringRef {
+        CFStringCreateWithBytes(
+            kCFAllocatorDefault,
+            s.as_ptr(),
+            s.len() as CFIndex,
+            K_CF_STRING_ENCODING_UTF8,
+            0,
+        )
+    }
+
+    unsafe fn cfstring_to_string(s: CFStringRef) -> Option<String> {
+        if s.is_null() {
+            return None;
+        }
+        let len = CFStringGetLength(s);
+        // UTF-8 can use up to 4 bytes per character
+        let buf_size = (len * 4 + 1) as usize;
+        let mut buf = vec![0u8; buf_size];
+        if CFStringGetCString(s, buf.as_mut_ptr(), buf_size as CFIndex, K_CF_STRING_ENCODING_UTF8) != 0 {
+            let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+            Some(String::from_utf8_lossy(&buf[..end]).into_owned())
+        } else {
+            None
         }
     }
 
-    Ok(players)
+    unsafe fn cfurl_to_path(url: CFURLRef) -> Option<String> {
+        if url.is_null() {
+            return None;
+        }
+        let mut buf = [0u8; 1024];
+        if CFURLGetFileSystemRepresentation(url, 1, buf.as_mut_ptr(), buf.len() as CFIndex) != 0 {
+            let end = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+            Some(String::from_utf8_lossy(&buf[..end]).into_owned())
+        } else {
+            None
+        }
+    }
+
+    /// Collect bundle IDs registered for a UTI (any role).
+    unsafe fn bundle_ids_for_uti(uti: &str) -> Vec<String> {
+        let cf_uti = cfstring_from_str(uti);
+        if cf_uti.is_null() {
+            return Vec::new();
+        }
+        let arr = LSCopyAllRoleHandlersForContentType(cf_uti, K_LS_ROLES_ALL);
+        CFRelease(cf_uti);
+        if arr.is_null() {
+            return Vec::new();
+        }
+        let count = CFArrayGetCount(arr);
+        let mut ids = Vec::with_capacity(count as usize);
+        for i in 0..count {
+            let val = CFArrayGetValueAtIndex(arr, i);
+            if let Some(s) = cfstring_to_string(val as CFStringRef) {
+                ids.push(s);
+            }
+        }
+        CFRelease(arr);
+        ids
+    }
+
+    /// Resolve a bundle ID to the first application path.
+    unsafe fn app_path_for_bundle_id(bundle_id: &str) -> Option<String> {
+        let cf_id = cfstring_from_str(bundle_id);
+        if cf_id.is_null() {
+            return None;
+        }
+        let mut error: CFErrorRef = std::ptr::null();
+        let urls = LSCopyApplicationURLsForBundleIdentifier(cf_id, &mut error);
+        CFRelease(cf_id);
+        if urls.is_null() {
+            return None;
+        }
+        let path = if CFArrayGetCount(urls) > 0 {
+            let url = CFArrayGetValueAtIndex(urls, 0);
+            cfurl_to_path(url as CFURLRef)
+        } else {
+            None
+        };
+        CFRelease(urls);
+        path
+    }
+
+    /// Display name from an app path: last path component minus `.app`.
+    fn display_name_from_path(path: &str) -> String {
+        let file = path.rsplit('/').next().unwrap_or(path);
+        file.strip_suffix(".app").unwrap_or(file).to_string()
+    }
+
+    pub fn discover_media_players() -> Vec<MediaPlayer> {
+        let mut bundle_ids = BTreeSet::new();
+
+        // Query abstract parents and common concrete subtypes to catch apps
+        // that register for specific formats but not the parent UTI.
+        const UTIS: &[&str] = &[
+            "public.movie",
+            "public.audio",
+            "public.mpeg-4",
+            "public.avi",
+            "public.mp3",
+            "com.apple.quicktime-movie",
+            "public.mpeg-4-audio",
+            "com.apple.m4a-audio",
+            "org.xiph.flac",
+        ];
+
+        unsafe {
+            for uti in UTIS {
+                for id in bundle_ids_for_uti(uti) {
+                    bundle_ids.insert(id);
+                }
+            }
+        }
+
+        let mut players: Vec<MediaPlayer> = bundle_ids
+            .into_iter()
+            .filter_map(|bid| {
+                let path = unsafe { app_path_for_bundle_id(&bid) }?;
+                let name = display_name_from_path(&path);
+                Some(MediaPlayer {
+                    id: bid.to_lowercase(),
+                    name,
+                    path,
+                })
+            })
+            .collect();
+
+        players.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        players
+    }
 }

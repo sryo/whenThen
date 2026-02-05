@@ -4,9 +4,8 @@ import { torrentsState } from "$lib/state/torrents.svelte";
 import { playbackState } from "$lib/state/playback.svelte";
 import { uiState } from "$lib/state/ui.svelte";
 import { tasksState } from "$lib/state/tasks.svelte";
-import { playletsState } from "$lib/state/playlets.svelte";
-import { executePipeline, tryExecuteNext } from "./execution-pipeline";
-import { assignTorrentToPlaylet, shouldSkipAutoAssign } from "./playlet-assignment";
+import { tryExecuteNext } from "./execution-pipeline";
+import { assignTorrentToPlaylet, findBestMatch, shouldSkipAutoAssign } from "./playlet-assignment";
 import type {
   DeviceFoundEvent,
   DeviceLostEvent,
@@ -67,6 +66,7 @@ export async function setupEventListeners() {
   unlisteners.push(
     await listen<TorrentAddedResponse>("torrent:added", (event) => {
       const t = event.payload;
+
       torrentsState.addTorrent({
         id: t.id,
         name: t.name,
@@ -82,19 +82,64 @@ export async function setupEventListeners() {
       });
       uiState.addToast(`${t.name} added`, "success");
 
-      // Skip auto-assignment if a manual card drop is in flight
+      // Manual card drop handles its own assignment
       if (shouldSkipAutoAssign()) return;
 
-      // Auto-assign or show playlet picker (only enabled playlets with torrent_added trigger)
-      const eligible = playletsState.playlets.filter(
-        (p) => p.enabled && p.trigger.type === "torrent_added"
-      );
-      if (eligible.length === 1) {
-        assignTorrentToPlaylet(eligible[0].id, t);
-      } else if (eligible.length >= 2) {
-        uiState.showPlayletPicker(t);
+      const match = findBestMatch(t.name, "torrent_added", undefined, t.files.length);
+      if (match) {
+        assignTorrentToPlaylet(match.id, t);
       }
     }),
+  );
+
+  unlisteners.push(
+    await listen<{ old_id: number; new_id: number; name: string }>(
+      "torrent:rechecked",
+      (event) => {
+        const { old_id, new_id, name } = event.payload;
+        torrentsState.removeTorrent(old_id);
+        torrentsState.addTorrent({
+          id: new_id,
+          name,
+          info_hash: "",
+          state: "initializing",
+          progress: 0,
+          download_speed: 0,
+          upload_speed: 0,
+          peers_connected: 0,
+          total_bytes: 0,
+          downloaded_bytes: 0,
+          file_count: 0,
+        });
+        tasksState.updateTorrentId(old_id, new_id);
+        uiState.addToast("Rechecking pieces", "info");
+      },
+    ),
+  );
+
+  unlisteners.push(
+    await listen<{ old_id: number; new_id: number; name: string }>(
+      "torrent:files-updated",
+      (event) => {
+        const { old_id, new_id, name } = event.payload;
+        torrentsState.removeTorrent(old_id);
+        torrentsState.addTorrent({
+          id: new_id,
+          name,
+          info_hash: "",
+          state: "initializing",
+          progress: 0,
+          download_speed: 0,
+          upload_speed: 0,
+          peers_connected: 0,
+          total_bytes: 0,
+          downloaded_bytes: 0,
+          file_count: 0,
+        });
+        tasksState.updateTorrentId(old_id, new_id);
+        uiState.addToast("File selection updated", "info");
+      },
+    ),
   );
 
   unlisteners.push(

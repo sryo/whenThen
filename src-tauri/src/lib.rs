@@ -3,11 +3,14 @@ mod errors;
 mod models;
 mod services;
 mod state;
+mod tray;
+
+use std::sync::atomic::Ordering;
 
 use models::AppConfig;
 use services::media_server::MediaServerState;
 use state::AppState;
-use tauri::{Emitter, Manager, RunEvent};
+use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -44,6 +47,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_positioner::init())
         .manage(app_state)
         .setup(|app| {
             let saved_config = load_saved_config(app);
@@ -67,6 +71,35 @@ pub fn run() {
                     e
                 })?;
             let persistence_dir = app_data_dir.join("session");
+
+            // Set up tray icon
+            tray::setup(app.handle())?;
+
+            // Close = hide main window (background mode)
+            if let Some(main_window) = app.get_webview_window("main") {
+                let handle = app.handle().clone();
+                main_window.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        if let Some(win) = handle.get_webview_window("main") {
+                            let _ = win.hide();
+                        }
+                    }
+                });
+            }
+
+            // Close = hide picker window (reuse, don't destroy)
+            if let Some(picker) = app.get_webview_window("picker") {
+                let handle = app.handle().clone();
+                picker.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        if let Some(win) = handle.get_webview_window("picker") {
+                            let _ = win.hide();
+                        }
+                    }
+                });
+            }
 
             let folder_watcher = state.folder_watcher.clone();
             let app_handle_for_watcher = app.handle().clone();
@@ -119,6 +152,7 @@ pub fn run() {
             commands::torrent::torrent_pause,
             commands::torrent::torrent_resume,
             commands::torrent::torrent_delete,
+            commands::torrent::torrent_recheck,
             commands::torrent::torrent_sync_restored,
             commands::torrent::torrent_update_files,
             // Chromecast commands
@@ -148,12 +182,18 @@ pub fn run() {
             // Settings commands
             commands::settings::settings_get,
             commands::settings::settings_update,
+            commands::settings::check_opened_via_url,
             // Automation commands
+            commands::automation::check_automation_permission,
             commands::automation::run_shortcut,
             commands::automation::run_applescript,
             commands::automation::run_shell_command,
             // Rename command
             commands::torrent::torrent_rename_files,
+            // Association commands
+            commands::associations::check_file_associations,
+            commands::associations::set_default_for_torrents,
+            commands::associations::set_default_for_magnets,
         ])
         .build(tauri::generate_context!())
         .expect("error while building whenThen");
@@ -203,8 +243,10 @@ fn handle_shutdown(app_handle: &tauri::AppHandle) {
 }
 
 fn handle_opened_urls(app_handle: &tauri::AppHandle, urls: Vec<tauri::Url>) {
-    if let Some(window) = app_handle.get_webview_window("main") {
-        let _ = window.set_focus();
+    // Mark that the app was opened via file/URL so the frontend skips showing the main window.
+    if !urls.is_empty() {
+        let state = app_handle.state::<AppState>();
+        state.opened_via_url.store(true, Ordering::SeqCst);
     }
 
     let app_handle = app_handle.clone();

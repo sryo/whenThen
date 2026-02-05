@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
@@ -18,6 +19,8 @@ pub struct AppState {
     pub local_file_tokens: Arc<RwLock<HashMap<String, TokenEntry>>>,
     pub torrent_names: Arc<RwLock<HashMap<usize, String>>>,
     pub folder_watcher: Arc<Mutex<Option<FolderWatcherHandle>>>,
+    /// Set when the app is launched via file association or deep link.
+    pub opened_via_url: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -34,6 +37,7 @@ impl AppState {
             local_file_tokens: Arc::new(RwLock::new(HashMap::new())),
             torrent_names: Arc::new(RwLock::new(HashMap::new())),
             folder_watcher: Arc::new(Mutex::new(None)),
+            opened_via_url: Arc::new(AtomicBool::new(false)),
         }
     }
 }

@@ -10,16 +10,24 @@
   let {
     files,
     torrentId,
+    deferred = false,
+    initialSelection,
+    onSelectionChange,
   }: {
     files: TorrentFileInfo[];
     torrentId: number;
+    deferred?: boolean;
+    initialSelection?: Set<number>;
+    onSelectionChange?: (indices: Set<number>) => void;
   } = $props();
 
   let selectedIndices = $state<Set<number>>(new Set());
   let expandedFolders = $state<Set<string>>(new Set());
 
   $effect(() => {
-    if (files.length > 0 && selectedIndices.size === 0) {
+    if (deferred && initialSelection) {
+      selectedIndices = new Set(initialSelection);
+    } else if (files.length > 0 && selectedIndices.size === 0) {
       selectedIndices = new Set(files.map((f) => f.index));
     }
   });
@@ -95,6 +103,15 @@
     return selected.length > 0 && selected.length < folderFiles.length;
   }
 
+  function commitSelection(next: Set<number>) {
+    selectedIndices = next;
+    if (deferred) {
+      onSelectionChange?.(next);
+    } else {
+      updateBackend();
+    }
+  }
+
   async function toggleFile(index: number) {
     const next = new Set(selectedIndices);
     if (next.has(index)) {
@@ -102,8 +119,7 @@
     } else {
       next.add(index);
     }
-    selectedIndices = next;
-    await updateBackend();
+    commitSelection(next);
   }
 
   async function toggleFolder(folderFiles: TorrentFileInfo[]) {
@@ -116,8 +132,7 @@
         next.add(f.index);
       }
     }
-    selectedIndices = next;
-    await updateBackend();
+    commitSelection(next);
   }
 
   function toggleFolderExpanded(path: string) {
@@ -139,22 +154,19 @@
   }
 
   async function selectOnly(index: number) {
-    selectedIndices = new Set([index]);
-    await updateBackend();
+    commitSelection(new Set([index]));
   }
 
   async function selectAllInFolder(folderFiles: TorrentFileInfo[]) {
     const next = new Set(selectedIndices);
     for (const f of folderFiles) next.add(f.index);
-    selectedIndices = next;
-    await updateBackend();
+    commitSelection(next);
   }
 
   async function deselectAllInFolder(folderFiles: TorrentFileInfo[]) {
     const next = new Set(selectedIndices);
     for (const f of folderFiles) next.delete(f.index);
-    selectedIndices = next;
-    await updateBackend();
+    commitSelection(next);
   }
 
   // Context menus

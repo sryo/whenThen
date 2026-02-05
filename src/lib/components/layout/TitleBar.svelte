@@ -4,8 +4,8 @@
   import { tasksState } from "$lib/state/tasks.svelte";
 
   const navItems: { view: ViewName; icon: typeof Zap; label: string }[] = [
-    { view: "playlets", icon: Zap, label: "Playlets" },
     { view: "activity", icon: Activity, label: "Activity" },
+    { view: "playlets", icon: Zap, label: "Playlets" },
     { view: "settings", icon: Settings, label: "Settings" },
   ];
 

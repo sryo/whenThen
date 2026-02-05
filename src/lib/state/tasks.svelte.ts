@@ -76,6 +76,7 @@ export const tasksState = {
           startedAt: null,
           completedAt: null,
           error: null,
+          skipReason: null,
         }))
       : [];
 
@@ -131,7 +132,7 @@ export const tasksState = {
     if (tIdx < 0) return;
     const results = tasks[tIdx].actionResults.map((ar) =>
       ar.actionId === actionId
-        ? { ...ar, status: "done" as ActionExecutionStatus, completedAt: new Date().toISOString(), error: null }
+        ? { ...ar, status: "done" as ActionExecutionStatus, completedAt: new Date().toISOString(), error: null, skipReason: null }
         : ar,
     );
     tasks[tIdx] = { ...tasks[tIdx], actionResults: results };
@@ -143,19 +144,19 @@ export const tasksState = {
     if (tIdx < 0) return;
     const results = tasks[tIdx].actionResults.map((ar) =>
       ar.actionId === actionId
-        ? { ...ar, status: "failed" as ActionExecutionStatus, completedAt: new Date().toISOString(), error }
+        ? { ...ar, status: "failed" as ActionExecutionStatus, completedAt: new Date().toISOString(), error, skipReason: null }
         : ar,
     );
     tasks[tIdx] = { ...tasks[tIdx], actionResults: results };
     persistTasks();
   },
 
-  markActionSkipped(taskId: string, actionId: string) {
+  markActionSkipped(taskId: string, actionId: string, reason?: string) {
     const tIdx = tasks.findIndex((t) => t.id === taskId);
     if (tIdx < 0) return;
     const results = tasks[tIdx].actionResults.map((ar) =>
       ar.actionId === actionId
-        ? { ...ar, status: "skipped" as ActionExecutionStatus, completedAt: new Date().toISOString() }
+        ? { ...ar, status: "skipped" as ActionExecutionStatus, completedAt: new Date().toISOString(), skipReason: reason ?? null }
         : ar,
     );
     tasks[tIdx] = { ...tasks[tIdx], actionResults: results };
@@ -187,6 +188,7 @@ export const tasksState = {
       startedAt: null,
       completedAt: null,
       error: null,
+      skipReason: null,
     }));
 
     tasks[tIdx] = {
@@ -198,12 +200,19 @@ export const tasksState = {
     persistTasks();
   },
 
+  updateTorrentId(oldTorrentId: number, newTorrentId: number) {
+    const idx = tasks.findIndex((t) => t.torrentId === oldTorrentId && (t.status === "waiting" || t.status === "executing"));
+    if (idx < 0) return;
+    tasks[idx] = { ...tasks[idx], torrentId: newTorrentId };
+    persistTasks();
+  },
+
   resetTaskForRetry(taskId: string) {
     const tIdx = tasks.findIndex((t) => t.id === taskId);
     if (tIdx < 0) return;
     const results = tasks[tIdx].actionResults.map((ar) =>
       ar.status === "failed" || ar.status === "skipped"
-        ? { ...ar, status: "pending" as ActionExecutionStatus, startedAt: null, completedAt: null, error: null }
+        ? { ...ar, status: "pending" as ActionExecutionStatus, startedAt: null, completedAt: null, error: null, skipReason: null }
         : ar,
     );
     tasks[tIdx] = { ...tasks[tIdx], status: "waiting", actionResults: results, completedAt: null };

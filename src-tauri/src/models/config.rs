@@ -5,13 +5,11 @@ pub struct AppConfig {
     pub download_directory: String,
     pub theme: ThemeMode,
     pub color_scheme: String,
-    pub always_on_top: bool,
     pub auto_discover: bool,
     pub max_download_speed: u64,
     pub max_upload_speed: u64,
     pub media_server_port: u16,
     pub auto_play_next: bool,
-    pub repeat_mode: RepeatMode,
     #[serde(default = "default_subtitle_languages")]
     pub subtitle_languages: Vec<String>,
     #[serde(default)]
@@ -30,6 +28,16 @@ pub struct AppConfig {
     /// Max tasks executing at the same time (0 = unlimited)
     #[serde(default)]
     pub max_concurrent_tasks: u32,
+    #[serde(default)]
+    pub delete_torrent_file_on_add: bool,
+    #[serde(default = "default_true")]
+    pub show_tray_icon: bool,
+    #[serde(default)]
+    pub default_cast_device: String,
+    #[serde(default)]
+    pub default_media_player: String,
+    #[serde(default)]
+    pub default_move_destination: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -40,16 +48,12 @@ pub enum ThemeMode {
     System,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum RepeatMode {
-    None,
-    One,
-    All,
-}
-
 fn default_subtitle_languages() -> Vec<String> {
     vec!["en".to_string()]
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_listen_port() -> u16 {
@@ -67,13 +71,11 @@ impl Default for AppConfig {
             download_directory: download_dir,
             theme: ThemeMode::System,
             color_scheme: "auto".to_string(),
-            always_on_top: false,
             auto_discover: true,
             max_download_speed: 0,
             max_upload_speed: 0,
             media_server_port: 9080,
             auto_play_next: true,
-            repeat_mode: RepeatMode::None,
             subtitle_languages: default_subtitle_languages(),
             opensubtitles_api_key: String::new(),
             enable_upnp: true,
@@ -82,6 +84,11 @@ impl Default for AppConfig {
             watch_folders_enabled: false,
             incomplete_directory: String::new(),
             max_concurrent_tasks: 0,
+            delete_torrent_file_on_add: false,
+            show_tray_icon: true,
+            default_cast_device: String::new(),
+            default_media_player: String::new(),
+            default_move_destination: String::new(),
         }
     }
 }
