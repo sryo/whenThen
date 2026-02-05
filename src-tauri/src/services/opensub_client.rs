@@ -104,7 +104,7 @@ pub async fn download(api_key: &str, file_id: i64) -> Result<(String, Vec<u8>)> 
     let body = serde_json::json!({ "file_id": file_id });
 
     let response = client
-        .post(&format!("{}/download", API_BASE))
+        .post(format!("{}/download", API_BASE))
         .header("Api-Key", api_key)
         .header("User-Agent", USER_AGENT)
         .header("Content-Type", "application/json")

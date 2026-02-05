@@ -137,7 +137,7 @@ fn parse_range(range_str: &str, file_length: u64) -> Result<(u64, u64), StatusCo
     let parts: Vec<&str> = range_str.split('-').collect();
 
     // Suffix range: bytes=-500
-    let (start, end) = if parts.first().map_or(true, |s| s.is_empty()) {
+    let (start, end) = if parts.first().is_none_or(|s| s.is_empty()) {
         let suffix: u64 = parts.get(1)
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
@@ -211,7 +211,7 @@ async fn stream_torrent(
     }
 
     let (ref filename, file_length) = file_details[file_idx];
-    let content_type = mime_guess::from_path(&filename)
+    let content_type = mime_guess::from_path(filename)
         .first_raw()
         .unwrap_or("application/octet-stream");
 

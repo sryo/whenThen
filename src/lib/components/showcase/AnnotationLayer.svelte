@@ -145,9 +145,9 @@
     let node: Element | null = el;
     let found = false;
     while (node && node !== section && !found) {
-      const parent = node.parentElement;
+      const parent: Element | null = node.parentElement;
       if (parent) {
-        for (const child of parent.children) {
+        for (const child of Array.from(parent.children)) {
           if (child === node) continue;
           if (
             (child.tagName === "LABEL" || child.tagName === "SPAN") &&

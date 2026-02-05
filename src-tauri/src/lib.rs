@@ -5,12 +5,15 @@ mod services;
 mod state;
 mod tray;
 
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 use std::sync::atomic::Ordering;
 
 use models::AppConfig;
 use services::media_server::MediaServerState;
 use state::AppState;
-use tauri::{Emitter, Manager, RunEvent, WindowEvent};
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+use tauri::Emitter;
+use tauri::{Manager, RunEvent, WindowEvent};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -200,6 +203,7 @@ pub fn run() {
 
     app.run(|app_handle, event| {
         match event {
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
             RunEvent::Opened { urls } => {
                 handle_opened_urls(app_handle, urls);
             }
@@ -242,6 +246,7 @@ fn handle_shutdown(app_handle: &tauri::AppHandle) {
     });
 }
 
+#[cfg(any(target_os = "macos", target_os = "ios"))]
 fn handle_opened_urls(app_handle: &tauri::AppHandle, urls: Vec<tauri::Url>) {
     // Mark that the app was opened via file/URL so the frontend skips showing the main window.
     if !urls.is_empty() {

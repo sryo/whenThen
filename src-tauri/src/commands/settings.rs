@@ -69,7 +69,7 @@ pub async fn settings_update(
     // Persist to store
     if let Ok(store) = app.store(STORE_FILE) {
         if let Ok(value) = serde_json::to_value(&config) {
-            let _ = store.set(STORE_KEY, value);
+            store.set(STORE_KEY, value);
             let _ = store.save();
         }
     }

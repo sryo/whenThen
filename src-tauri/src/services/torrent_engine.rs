@@ -126,7 +126,7 @@ pub async fn sync_restored_torrents(
             (
                 (live.download_speed.mbps * 1024.0 * 1024.0) as u64,
                 (live.upload_speed.mbps * 1024.0 * 1024.0) as u64,
-                live.snapshot.peer_stats.live as usize,
+                live.snapshot.peer_stats.live,
             )
         } else {
             (0, 0, 0)
@@ -446,7 +446,7 @@ pub async fn list_torrents(state: &AppState) -> Result<Vec<TorrentSummary>> {
             (
                 (live.download_speed.mbps * 1024.0 * 1024.0) as u64,
                 (live.upload_speed.mbps * 1024.0 * 1024.0) as u64,
-                live.snapshot.peer_stats.live as usize,
+                live.snapshot.peer_stats.live,
             )
         } else {
             (0, 0, 0)
@@ -511,7 +511,7 @@ pub async fn get_torrent_details(state: &AppState, id: usize) -> Result<TorrentD
         (
             (live.download_speed.mbps * 1024.0 * 1024.0) as u64,
             (live.upload_speed.mbps * 1024.0 * 1024.0) as u64,
-            live.snapshot.peer_stats.live as usize,
+            live.snapshot.peer_stats.live,
         )
     } else {
         (0, 0, 0)
@@ -800,7 +800,7 @@ fn spawn_progress_emitter(state: &AppState, app_handle: AppHandle, torrent_id: u
                 (
                     (live.download_speed.mbps * 1024.0 * 1024.0) as u64,
                     (live.upload_speed.mbps * 1024.0 * 1024.0) as u64,
-                    live.snapshot.peer_stats.live as usize,
+                    live.snapshot.peer_stats.live,
                 )
             } else {
                 (0, 0, 0)
