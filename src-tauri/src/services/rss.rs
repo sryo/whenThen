@@ -135,14 +135,6 @@ fn extract_size_from_title(title: &str) -> Option<u64> {
     None
 }
 
-/// Check if value matches with word boundaries (case-insensitive).
-fn matches_word_boundary(title: &str, value: &str) -> bool {
-    let pattern = format!(r"(?i)\b{}\b", regex::escape(value));
-    Regex::new(&pattern)
-        .map(|re| re.is_match(title))
-        .unwrap_or(false)
-}
-
 /// Evaluate a single filter against a feed item.
 fn evaluate_single_filter(item: &ParsedFeedItem, filter: &FeedFilter) -> bool {
     let title_lower = item.title.to_lowercase();
@@ -174,12 +166,6 @@ fn evaluate_single_filter(item: &ParsedFeedItem, filter: &FeedFilter) -> bool {
                 true // No size info = pass through
             }
         }
-        FilterType::Episode => matches_word_boundary(&item.title, &filter.value),
-        FilterType::Resolution => matches_word_boundary(&item.title, &filter.value),
-        FilterType::Source => matches_word_boundary(&item.title, &filter.value),
-        FilterType::Codec => matches_word_boundary(&item.title, &filter.value),
-        FilterType::Audio => matches_word_boundary(&item.title, &filter.value),
-        FilterType::Hdr => matches_word_boundary(&item.title, &filter.value),
     }
 }
 
@@ -225,12 +211,6 @@ pub fn evaluate_filters_with_logic(
                 FilterType::MustContain => Some(format!("contains \"{}\"", f.value)),
                 FilterType::MustNotContain => Some(format!("excludes \"{}\"", f.value)),
                 FilterType::Regex => Some(format!("regex /{}/", f.value)),
-                FilterType::Episode => Some(format!("episode \"{}\"", f.value)),
-                FilterType::Resolution => Some(format!("resolution \"{}\"", f.value)),
-                FilterType::Source => Some(format!("source \"{}\"", f.value)),
-                FilterType::Codec => Some(format!("codec \"{}\"", f.value)),
-                FilterType::Audio => Some(format!("audio \"{}\"", f.value)),
-                FilterType::Hdr => Some(format!("HDR \"{}\"", f.value)),
                 FilterType::SizeRange => Some(format!("size {}", f.value)),
             }
         })

@@ -245,9 +245,10 @@
     </div>
 
     <!-- Scrollable content -->
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <div class="min-h-0 flex-1 overflow-y-auto p-4">
+      <div class="flex flex-col gap-3">
       <!-- 1. Storage -->
-      <div class="px-5 py-5">
+      <div class="rounded-xl bg-[var(--color-bg-secondary)] p-4">
         <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Storage</h3>
         <div class="space-y-4">
           <div>
@@ -346,7 +347,7 @@
       </div>
 
       <!-- 2. Playback -->
-      <div class="border-t border-[var(--color-border)] px-5 py-5">
+      <div class="rounded-xl bg-[var(--color-bg-secondary)] p-4">
         <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Playback</h3>
         <div class="space-y-4">
           <div>
@@ -425,7 +426,7 @@
       </div>
 
       <!-- 3. Subtitles -->
-      <div class="border-t border-[var(--color-border)] px-5 py-5">
+      <div class="rounded-xl bg-[var(--color-bg-secondary)] p-4">
         <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Subtitles</h3>
         <div class="space-y-4">
           <div>
@@ -469,7 +470,7 @@
       </div>
 
       <!-- 4. Transfers -->
-      <div class="border-t border-[var(--color-border)] px-5 py-5">
+      <div class="rounded-xl bg-[var(--color-bg-secondary)] p-4">
         <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Transfers</h3>
         <div class="space-y-4">
           <div class="grid grid-cols-2 gap-4">
@@ -549,7 +550,7 @@
       </div>
 
       <!-- 5. Network -->
-      <div class="border-t border-[var(--color-border)] px-5 py-5">
+      <div class="rounded-xl bg-[var(--color-bg-secondary)] p-4">
         <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Network</h3>
         <div class="space-y-4">
           <div>
@@ -603,7 +604,7 @@
       </div>
 
       <!-- 6. Automation -->
-      <div class="border-t border-[var(--color-border)] px-5 py-5">
+      <div class="rounded-xl bg-[var(--color-bg-secondary)] p-4">
         <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Automation</h3>
         <div class="space-y-4">
           <div>
@@ -641,6 +642,7 @@
             </button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   </div>

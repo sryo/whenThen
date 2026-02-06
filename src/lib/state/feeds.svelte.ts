@@ -20,17 +20,7 @@ export interface Interest {
 }
 
 export interface FeedFilter {
-  type:
-    | "must_contain"
-    | "must_not_contain"
-    | "regex"
-    | "size_range"
-    | "episode"
-    | "resolution"
-    | "source"
-    | "codec"
-    | "audio"
-    | "hdr";
+  type: "must_contain" | "must_not_contain" | "regex" | "size_range";
   value: string;
   enabled: boolean;
 }

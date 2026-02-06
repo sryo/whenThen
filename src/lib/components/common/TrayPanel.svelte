@@ -1,7 +1,10 @@
 <!-- Tray panel: screener inbox + active downloads. -->
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { Pause, Play, X, Settings, ThumbsUp, ThumbsDown, AlertTriangle, Film, FileText, Loader2, ChevronDown, ChevronUp } from "lucide-svelte";
+  import { Pause, Play, X, Settings, ThumbsUp, ThumbsDown, AlertTriangle, Film, FileText, Loader2, ChevronDown, ChevronUp, RefreshCw, Trash2 } from "lucide-svelte";
+  import ContextMenu from "$lib/components/common/ContextMenu.svelte";
+  import { useContextMenu } from "$lib/utils";
+  import type { ContextMenuEntry } from "$lib/types/ui";
   import { torrentsState } from "$lib/state/torrents.svelte";
   import { settingsState } from "$lib/state/settings.svelte";
   import { feedsState, type PendingMatch, type TorrentMetadata } from "$lib/state/feeds.svelte";
@@ -20,18 +23,20 @@
     setupTriggerWatcher,
     cleanupTriggerWatcher,
   } from "$lib/services/trigger-watcher";
-  import { settingsGet, torrentSyncRestored, torrentPause, torrentResume, torrentDelete } from "$lib/services/tauri-commands";
+  import { settingsGet, torrentSyncRestored, torrentPause, torrentResume, torrentDelete, torrentRecheck } from "$lib/services/tauri-commands";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { emit, listen } from "@tauri-apps/api/event";
 
   let visible = $state(false);
   let closing = $state(false);
-  let activeTab = $state<"screener" | "downloads">("screener");
+  let activeTab = $state<"screener" | "downloads">("downloads");
   let expandedMatchId = $state<string | null>(null);
   let loadingMetadata = $state<string | null>(null);
 
   const activeDownloads = $derived(torrentsState.activeTorrents);
   const pendingMatches = $derived(feedsState.pendingMatches);
+
+  const torrentCtx = useContextMenu<{ id: number; state: string }>();
 
   function doShow() {
     closing = false;
@@ -85,6 +90,10 @@
         await new Promise((r) => setTimeout(r, 500));
       }
     }
+
+    // Fail any orphaned tasks whose torrents no longer exist
+    const validTorrentIds = new Set(torrentsState.torrents.map((t) => t.id));
+    tasksState.reconcileWithTorrents(validTorrentIds);
 
     // Listen for pending count updates
     const unlisten = await listen<number>("rss:pending-count", (event) => {
@@ -141,7 +150,56 @@
   async function handleRemove(id: number) {
     try {
       await torrentDelete(id, false);
-    } catch {}
+      torrentsState.removeTorrent(id);
+      tasksState.failTasksForTorrent(id);
+    } catch (e) {
+      console.error("Failed to remove torrent:", e);
+    }
+  }
+
+  async function handleRecheck(id: number) {
+    try {
+      await torrentRecheck(id);
+    } catch (e) {
+      console.error("Failed to recheck torrent:", e);
+    }
+  }
+
+  async function handleDeleteWithFiles(id: number) {
+    try {
+      await torrentDelete(id, true);
+      torrentsState.removeTorrent(id);
+      tasksState.failTasksForTorrent(id);
+    } catch (e) {
+      console.error("Failed to delete torrent with files:", e);
+    }
+  }
+
+  function torrentContextMenuItems(id: number, state: string): ContextMenuEntry[] {
+    return [
+      {
+        icon: state === "paused" ? Play : Pause,
+        label: state === "paused" ? "Resume" : "Pause",
+        action: () => handlePauseResume(id, state),
+      },
+      {
+        icon: RefreshCw,
+        label: "Recheck",
+        action: () => handleRecheck(id),
+      },
+      { type: "divider" },
+      {
+        icon: X,
+        label: "Remove",
+        action: () => handleRemove(id),
+      },
+      {
+        icon: Trash2,
+        label: "Remove with files",
+        danger: true,
+        action: () => handleDeleteWithFiles(id),
+      },
+    ];
   }
 
   async function toggleExpand(match: PendingMatch) {
@@ -198,27 +256,31 @@
   <div class="tray-panel {closing ? 'panel-slide-up' : 'panel-slide-down'}">
     <!-- Header with tabs -->
     <div class="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2">
-      <div class="flex items-center gap-1">
+      <div class="relative flex items-center gap-1 rounded-lg bg-[var(--color-bg-secondary)] p-0.5">
+        <!-- Sliding indicator -->
+        <div
+          class="absolute h-[calc(100%-4px)] rounded-md bg-[var(--color-primary)] tab-indicator"
+          style="width: calc(50% - 2px); left: {activeTab === 'screener' ? '2px' : 'calc(50% + 0px)'};"
+        ></div>
         <button
           onclick={() => activeTab = "screener"}
-          class="rounded-md px-2 py-1 text-xs font-medium transition-colors {activeTab === 'screener' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+          class="relative z-10 rounded-md px-2 py-1 text-xs font-medium transition-colors {activeTab === 'screener' ? 'text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
         >
           Screener
           {#if pendingMatches.length > 0}
-            <span class="ml-1 rounded-full bg-[var(--color-error)] px-1.5 text-[10px] text-white">{pendingMatches.length}</span>
+            <span class="ml-1 rounded-full {activeTab === 'screener' ? 'bg-white/20' : 'bg-[var(--color-error)]'} px-1.5 text-[10px] text-white">{pendingMatches.length}</span>
           {/if}
         </button>
         <button
           onclick={() => activeTab = "downloads"}
-          class="rounded-md px-2 py-1 text-xs font-medium transition-colors {activeTab === 'downloads' ? 'bg-[var(--color-primary)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
+          class="relative z-10 rounded-md px-2 py-1 text-xs font-medium transition-colors {activeTab === 'downloads' ? 'text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}"
         >
           Downloads
           {#if activeDownloads.length > 0}
-            <span class="ml-1 text-[10px] opacity-60">{activeDownloads.length}</span>
+            <span class="ml-1 text-[10px] {activeTab === 'downloads' ? 'text-white/60' : 'opacity-60'}">{activeDownloads.length}</span>
           {/if}
         </button>
       </div>
-      <span class="text-[10px] font-bold text-[var(--color-text-muted)]">whenThen</span>
     </div>
 
     <!-- Content -->
@@ -356,7 +418,11 @@
             </div>
           {:else}
             {#each activeDownloads as torrent (torrent.id)}
-              <div class="mb-2 rounded-lg bg-[var(--color-bg-secondary)] p-2.5">
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                class="mb-2 rounded-lg bg-[var(--color-bg-secondary)] p-2.5"
+                oncontextmenu={(e) => torrentCtx.open(e, { id: torrent.id, state: torrent.state })}
+              >
                 <div class="mb-1.5 truncate text-sm font-medium text-[var(--color-text)]">
                   {torrent.name}
                 </div>
@@ -407,9 +473,8 @@
     <div class="flex items-center justify-between border-t border-[var(--color-border)] px-3 py-2">
       <button
         onclick={openEditor}
-        class="flex items-center gap-1.5 text-xs font-medium text-[var(--color-primary)] hover:underline"
+        class="text-xs font-medium text-[var(--color-primary)] hover:underline"
       >
-        <Settings class="h-3.5 w-3.5" />
         Open whenThen
       </button>
       <button
@@ -420,6 +485,10 @@
       </button>
     </div>
   </div>
+{/if}
+
+{#if torrentCtx.state}
+  <ContextMenu x={torrentCtx.state.x} y={torrentCtx.state.y} items={torrentContextMenuItems(torrentCtx.state.data.id, torrentCtx.state.data.state)} onclose={torrentCtx.close} />
 {/if}
 
 <style>
@@ -450,5 +519,9 @@
   @keyframes slideUp {
     from { opacity: 1; transform: translateY(0) scale(1); }
     to   { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  }
+
+  .tab-indicator {
+    transition: left 200ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 </style>

@@ -218,4 +218,38 @@ export const tasksState = {
     tasks[tIdx] = { ...tasks[tIdx], status: "waiting", actionResults: results, completedAt: null };
     persistTasks();
   },
+
+  // Fail any active tasks for a torrent that was deleted
+  failTasksForTorrent(torrentId: number) {
+    let changed = false;
+    tasks = tasks.map((t) => {
+      if (t.torrentId === torrentId && (t.status === "waiting" || t.status === "executing")) {
+        changed = true;
+        return {
+          ...t,
+          status: "failed" as TaskStatus,
+          completedAt: new Date().toISOString(),
+        };
+      }
+      return t;
+    });
+    if (changed) persistTasks();
+  },
+
+  // Remove orphaned tasks that reference non-existent torrents
+  reconcileWithTorrents(validTorrentIds: Set<number>) {
+    let changed = false;
+    tasks = tasks.map((t) => {
+      if ((t.status === "waiting" || t.status === "executing") && !validTorrentIds.has(t.torrentId)) {
+        changed = true;
+        return {
+          ...t,
+          status: "failed" as TaskStatus,
+          completedAt: new Date().toISOString(),
+        };
+      }
+      return t;
+    });
+    if (changed) persistTasks();
+  },
 };

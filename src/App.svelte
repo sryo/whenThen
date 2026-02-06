@@ -74,6 +74,10 @@
       }
     }
 
+    // Fail any orphaned tasks whose torrents no longer exist
+    const validTorrentIds = new Set(torrentsState.torrents.map((t) => t.id));
+    tasksState.reconcileWithTorrents(validTorrentIds);
+
     // Auto-assign unmatched restored torrents to best-matching playlet
     for (const torrent of torrentsState.torrents) {
       if (tasksState.getByTorrentId(torrent.id)) continue;

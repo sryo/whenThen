@@ -83,7 +83,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
     bind:this={menuEl}
-    class="absolute flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] py-1 shadow-xl"
+    class="absolute flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)]/80 py-1 shadow-xl backdrop-blur-xl"
     style="left: {clamped.left}px; top: {clamped.top}px;"
     onclick={(e) => e.stopPropagation()}
   >

@@ -32,6 +32,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
         .icon(icon)
         .tooltip("whenThen")
         .menu(&menu)
+        .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => {
                 show_main_window(app);
@@ -44,6 +45,9 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
+            // Inform positioner of tray location for TrayCenter positioning
+            tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
+
             let app = tray.app_handle();
             match event {
                 TrayIconEvent::Click {

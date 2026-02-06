@@ -61,12 +61,6 @@ pub enum FilterType {
     MustNotContain,
     Regex,
     SizeRange,
-    Episode,
-    Resolution,
-    Source,
-    Codec,
-    Audio,
-    Hdr,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

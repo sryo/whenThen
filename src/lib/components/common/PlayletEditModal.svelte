@@ -72,7 +72,6 @@
     download_complete: "Download complete",
     metadata_received: "Metadata ready",
     seeding_ratio: "Seeding ratio",
-    folder_watch: "Folder watch",
   };
 
   const triggerTypeIcons: Record<TriggerType, typeof Link> = {
@@ -80,7 +79,6 @@
     download_complete: CircleCheck,
     metadata_received: FileSearch,
     seeding_ratio: ArrowUpDown,
-    folder_watch: FolderSearch,
   };
 
   let {
@@ -345,30 +343,6 @@
               </div>
             {/if}
 
-            {#if activeTriggerType === "folder_watch"}
-              <div class="mt-3 flex items-center gap-2">
-                <span class="text-sm text-[var(--color-text-secondary)]">Folder</span>
-                <button
-                  onclick={pickWatchFolder}
-                  class="h-7 min-w-0 flex-1 truncate rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-left text-xs text-[var(--color-text)] hover:bg-[var(--color-bg-tertiary)]"
-                >
-                  {#if playlet.trigger.watchFolder}
-                    {playlet.trigger.watchFolder.replace(/\/+$/, "").split("/").pop()}
-                  {:else}
-                    <span class="text-[var(--color-text-muted)]">All watched folders</span>
-                  {/if}
-                </button>
-                {#if playlet.trigger.watchFolder}
-                  <button
-                    onclick={clearWatchFolder}
-                    class="shrink-0 rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-error)]"
-                    title="Use all watched folders"
-                  >
-                    <X class="h-3.5 w-3.5" />
-                  </button>
-                {/if}
-              </div>
-            {/if}
           </div>
 
           <!-- Connector line -->

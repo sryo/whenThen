@@ -105,7 +105,23 @@ pub fn run() {
                     &[&hide_item, &hide_others_item, &show_all_item, &separator, &quit_item],
                 )?;
 
-                let menu = Menu::with_items(app_handle, &[&app_submenu])?;
+                // Edit menu for clipboard operations
+                let undo_item = PredefinedMenuItem::undo(app_handle, Some("Undo"))?;
+                let redo_item = PredefinedMenuItem::redo(app_handle, Some("Redo"))?;
+                let cut_item = PredefinedMenuItem::cut(app_handle, Some("Cut"))?;
+                let copy_item = PredefinedMenuItem::copy(app_handle, Some("Copy"))?;
+                let paste_item = PredefinedMenuItem::paste(app_handle, Some("Paste"))?;
+                let select_all_item = PredefinedMenuItem::select_all(app_handle, Some("Select All"))?;
+                let edit_separator = PredefinedMenuItem::separator(app_handle)?;
+
+                let edit_submenu = Submenu::with_items(
+                    app_handle,
+                    "Edit",
+                    true,
+                    &[&undo_item, &redo_item, &edit_separator, &cut_item, &copy_item, &paste_item, &select_all_item],
+                )?;
+
+                let menu = Menu::with_items(app_handle, &[&app_submenu, &edit_submenu])?;
                 app.set_menu(menu)?;
             }
 
@@ -173,6 +189,11 @@ pub fn run() {
                         *folder_watcher.lock().await = Some(handle);
                     }
                 }
+
+                // Load persisted RSS sources and interests
+                let rss_app_state = app_handle_for_rss.state::<AppState>();
+                commands::rss::load_sources(&app_handle_for_rss, &rss_app_state).await;
+                commands::rss::load_interests(&app_handle_for_rss, &rss_app_state).await;
 
                 // Start RSS polling service
                 let rss_handle = services::rss::start_service(app_handle_for_rss, rss_state.clone());

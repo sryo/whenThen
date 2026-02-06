@@ -4,16 +4,10 @@
   import { feedsState, type Interest, type FeedFilter } from "$lib/state/feeds.svelte";
 
   const placeholders: Record<FeedFilter["type"], string> = {
-    must_contain: "Severance, 1080p",
-    must_not_contain: "CAM, 720p, HDTV",
+    must_contain: "Severance, 1080p, S01E01",
+    must_not_contain: "CAM, HDTV, x264",
     regex: "S\\d{2}E\\d{2}",
     size_range: "500-3000",
-    episode: "S01, S01E01",
-    resolution: "1080p, 2160p, 4K",
-    source: "BluRay, WEB-DL, REMUX",
-    codec: "x265, HEVC, x264",
-    audio: "DTS, TrueHD, Atmos",
-    hdr: "HDR, HDR10+, DV",
   };
 
   async function addInterest() {
@@ -123,12 +117,6 @@
               <option value="must_not_contain">excludes</option>
               <option value="regex">matches</option>
               <option value="size_range">size (MB)</option>
-              <option value="episode">episode</option>
-              <option value="resolution">resolution</option>
-              <option value="source">source</option>
-              <option value="codec">codec</option>
-              <option value="audio">audio</option>
-              <option value="hdr">HDR</option>
             </select>
 
             <input
