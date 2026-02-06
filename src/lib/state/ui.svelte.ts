@@ -4,10 +4,11 @@ import type { TorrentAddedResponse } from "$lib/types/torrent";
 
 export type { ViewName, Toast };
 
-let activeView = $state<ViewName>("activity");
+let activeView = $state<ViewName>("editor");
 let toasts = $state<Toast[]>([]);
 let pendingTorrent = $state<TorrentAddedResponse | null>(null);
 let flyingPip = $state<{ id: string; fromX: number; fromY: number } | null>(null);
+let showSettings = $state(false);
 
 export const uiState = {
   get activeView() {
@@ -21,6 +22,9 @@ export const uiState = {
   },
   get flyingPip() {
     return flyingPip;
+  },
+  get showSettings() {
+    return showSettings;
   },
 
   setView(view: ViewName) {
@@ -53,5 +57,17 @@ export const uiState = {
 
   clearFlyingPip() {
     flyingPip = null;
+  },
+
+  openSettings() {
+    showSettings = true;
+  },
+
+  closeSettings() {
+    showSettings = false;
+  },
+
+  toggleSettings() {
+    showSettings = !showSettings;
   },
 };

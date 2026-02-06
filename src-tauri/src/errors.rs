@@ -34,7 +34,19 @@ pub enum WhenThenError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
+    #[error("Not found: {0}")]
+    NotFound(String),
+
+    #[error("RSS error: {0}")]
+    Rss(String),
 }
+
+// Type alias for backwards compatibility
+pub type AppError = WhenThenError;
 
 impl Serialize for WhenThenError {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -48,6 +60,18 @@ impl Serialize for WhenThenError {
 impl From<anyhow::Error> for WhenThenError {
     fn from(err: anyhow::Error) -> Self {
         WhenThenError::Internal(err.to_string())
+    }
+}
+
+impl From<reqwest::Error> for WhenThenError {
+    fn from(err: reqwest::Error) -> Self {
+        WhenThenError::Rss(err.to_string())
+    }
+}
+
+impl From<feed_rs::parser::ParseFeedError> for WhenThenError {
+    fn from(err: feed_rs::parser::ParseFeedError) -> Self {
+        WhenThenError::Rss(err.to_string())
     }
 }
 

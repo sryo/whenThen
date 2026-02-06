@@ -1,5 +1,4 @@
 <script lang="ts">
-  import type { Component } from "svelte";
   import {
     Plus,
     Copy,
@@ -7,8 +6,11 @@
     ToggleLeft,
     ToggleRight,
     X,
+    Play,
+    HelpCircle,
+    GripVertical,
   } from "lucide-svelte";
-  import { playletsState, derivePlayletName } from "$lib/state/playlets.svelte";
+  import { playletsState } from "$lib/state/playlets.svelte";
   import ContextMenu from "$lib/components/common/ContextMenu.svelte";
   import { useContextMenu } from "$lib/utils";
   import type { ContextMenuEntry } from "$lib/types/ui";
@@ -18,13 +20,13 @@
   import { handleDroppedContent, handleDroppedFile } from "$lib/services/drag-drop";
   import { assignTorrentToPlaylet, beginManualDrop } from "$lib/services/playlet-assignment";
   import PlayletEditModal from "$lib/components/common/PlayletEditModal.svelte";
-  import ActionBlock from "$lib/components/common/ActionBlock.svelte";
+  import SourcesSection from "$lib/components/common/SourcesSection.svelte";
+  import InterestsSection from "$lib/components/common/InterestsSection.svelte";
   import { settingsState } from "$lib/state/settings.svelte";
   import type { Action } from "$lib/types/playlet";
   import { playletTemplates, createPlayletFromTemplate } from "$lib/services/playlet-templates";
   import type { PlayletTemplate } from "$lib/services/playlet-templates";
-  import { flowConnector } from "$lib/utils/flow-connector";
-  import { buildTriggerIcons, triggerDetails, buildActionBlocks } from "$lib/utils/playlet-display";
+  import { triggerDetails, buildActionPhrases } from "$lib/utils/playlet-display";
 
   // Convert a template to a pseudo-Playlet so we can reuse the block builders
   function templateAsPlaylet(t: PlayletTemplate): Playlet {
@@ -51,6 +53,11 @@
   let removingCardId = $state<string | null>(null);
   let showTemplatePicker = $state(false);
   let closingTemplatePicker = $state(false);
+
+  // Drag-to-reorder state
+  let dragFromIndex = $state<number | null>(null);
+  let dropTargetIndex = $state<number | null>(null);
+  let cardsContainer: HTMLElement | undefined = $state();
 
   const ctx = useContextMenu<string>();
 
@@ -203,89 +210,158 @@
       }
     }
   }
+
+  // Drag-to-reorder handlers
+  function handlePlayletDragStart(index: number, e: PointerEvent) {
+    dragFromIndex = index;
+    cardsContainer?.setPointerCapture(e.pointerId);
+  }
+
+  function handlePlayletDragMove(e: PointerEvent) {
+    if (dragFromIndex === null || !cardsContainer) return;
+    const cards = cardsContainer.querySelectorAll<HTMLElement>("[data-playlet-index]");
+    let target: number | null = null;
+    for (const card of cards) {
+      const rect = card.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      const idx = parseInt(card.dataset.playletIndex!, 10);
+      if (e.clientY < midY) {
+        target = idx;
+        break;
+      }
+      target = idx + 1;
+    }
+    dropTargetIndex = target;
+  }
+
+  function handlePlayletDragEnd() {
+    if (dragFromIndex !== null && dropTargetIndex !== null) {
+      const to = dropTargetIndex > dragFromIndex ? dropTargetIndex - 1 : dropTargetIndex;
+      if (to !== dragFromIndex) {
+        playletsState.reorderPlaylet(dragFromIndex, to);
+      }
+    }
+    dragFromIndex = null;
+    dropTargetIndex = null;
+  }
 </script>
 
 <div class="mx-auto max-w-2xl p-6">
-  <div class="grid grid-cols-1 gap-3">
-    {#each playletsState.playlets as playlet (playlet.id)}
-      {@const triggerIcons = buildTriggerIcons(playlet)}
-      {@const details = triggerDetails(playlet)}
-      {@const actions = buildActionBlocks(playlet)}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        ondragover={(e) => handleCardDragOver(e, playlet.id)}
-        ondragleave={handleCardDragLeave}
-        ondrop={(e) => handleCardDrop(e, playlet.id)}
-        oncontextmenu={(e) => ctx.open(e, playlet.id)}
-        onanimationend={() => { newCardIds.delete(playlet.id); newCardIds = newCardIds; }}
-        class="group flex flex-col overflow-hidden rounded-xl bg-[var(--color-bg-secondary)] text-left transition-all duration-150 {draggingOverPlayletId === playlet.id ? 'ring-2 ring-[var(--color-primary)] scale-[1.02] shadow-lg' : 'hover:bg-[var(--color-bg-tertiary)]'} {newCardIds.has(playlet.id) ? 'card-enter' : ''} {removingCardId === playlet.id ? 'card-exit' : ''} {!playlet.enabled ? 'opacity-50' : ''}"
-      >
-        <!-- pointer-events-none during drag so the outer div receives drop events -->
-        <button
-          onclick={() => openPlaylet(playlet.id)}
-          ondragover={(e) => e.preventDefault()}
-          class="flex flex-1 flex-col text-left"
-        >
-          <!-- Mini-blocks strip -->
-          <div class="relative flex flex-wrap items-end gap-x-3 gap-y-4 px-3 py-3" use:flowConnector>
-            <!-- Trigger block (When + Where + With combined) -->
-            <div data-flow-block class="flex flex-col items-center gap-1 rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 px-3 py-2">
-              <div class="flex items-center gap-1.5">
-                {#each triggerIcons as ti}
-                  {@const Icon = ti.icon as Component}
-                  <Icon style="color: {ti.color};" class="h-7 w-7 shrink-0" />
-                {/each}
-              </div>
-              <div class="flex max-w-[10rem] items-center gap-1 truncate text-xs font-bold">
-                {#each details as part, i}
-                  {#if i > 0}
-                    <span class="text-[var(--color-text-muted)]">·</span>
-                  {/if}
-                  <span style="color: {part.color};">{part.text}</span>
-                {/each}
-              </div>
-            </div>
+  <!-- Sources section -->
+  <SourcesSection />
 
-            <!-- Action blocks -->
-            {#each actions as action}
-              <div data-flow-block>
-                <ActionBlock icon={action.icon} color={action.color} label={action.label} />
-              </div>
-            {/each}
-          </div>
+  <!-- Connector line -->
+  <div class="pointer-events-none flex justify-center">
+    <div class="h-4 w-[4px] rounded-full bg-[var(--color-border)]"></div>
+  </div>
 
-          <!-- Playlet name + task count -->
-          <div class="flex items-center justify-between gap-2 px-4 py-4">
-            <h3 class="text-base font-bold leading-snug text-[var(--color-text)]">
-              {derivePlayletName(playlet)}
-            </h3>
-            <span class="shrink-0 text-lg font-black {activeTaskCount(playlet.id) > 0 ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}">
-              {activeTaskCount(playlet.id)}
-            </span>
-          </div>
-        </button>
+  <!-- Interests section -->
+  <InterestsSection />
 
+  <!-- Connector line -->
+  <div class="pointer-events-none flex justify-center">
+    <div class="h-4 w-[4px] rounded-full bg-[var(--color-border)]"></div>
+  </div>
+
+  <!-- Do section -->
+  <div class="space-y-3 rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <h3 class="text-2xl font-black text-[var(--color-success)]">Do</h3>
+        <Play class="h-4 w-4 text-[var(--color-success)]" />
       </div>
-    {/each}
+      <button
+        class="text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+        data-tooltip="What happens when we catch something you like."
+        data-tooltip-left
+      >
+        <HelpCircle class="h-4 w-4" />
+      </button>
+    </div>
 
-    <!-- New playlet card -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="space-y-3"
+      bind:this={cardsContainer}
+      onpointermove={handlePlayletDragMove}
+      onpointerup={handlePlayletDragEnd}
+      onpointercancel={handlePlayletDragEnd}
+    >
+      {#each playletsState.playlets as playlet, index (playlet.id)}
+        {@const details = triggerDetails(playlet)}
+        {@const phrases = buildActionPhrases(playlet)}
+        <!-- Drop indicator above -->
+        {#if dropTargetIndex === index && dragFromIndex !== null && dragFromIndex !== index && dragFromIndex !== index - 1}
+          <div class="h-0.5 rounded-full bg-[var(--color-primary)]"></div>
+        {/if}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          data-playlet-index={index}
+          ondragover={(e) => handleCardDragOver(e, playlet.id)}
+          ondragleave={handleCardDragLeave}
+          ondrop={(e) => handleCardDrop(e, playlet.id)}
+          oncontextmenu={(e) => ctx.open(e, playlet.id)}
+          onanimationend={() => { newCardIds.delete(playlet.id); newCardIds = newCardIds; }}
+          class="group flex flex-col overflow-hidden rounded-xl bg-[var(--color-success)]/10 text-left transition-all duration-150 {draggingOverPlayletId === playlet.id ? 'ring-2 ring-[var(--color-primary)] scale-[1.02] shadow-lg' : 'hover:bg-[var(--color-success)]/15'} {newCardIds.has(playlet.id) ? 'card-enter' : ''} {removingCardId === playlet.id ? 'card-exit' : ''} {!playlet.enabled ? 'opacity-50' : ''} {dragFromIndex === index ? 'opacity-40' : ''}"
+        >
+          <div class="flex items-center">
+            <!-- Drag handle -->
+            <button
+              onpointerdown={(e) => handlePlayletDragStart(index, e)}
+              class="flex shrink-0 cursor-grab items-center justify-center px-2 py-4 text-[var(--color-text-muted)] opacity-0 transition-opacity hover:text-[var(--color-text)] group-hover:opacity-100 {dragFromIndex !== null ? 'cursor-grabbing' : ''}"
+            >
+              <GripVertical class="h-4 w-4" />
+            </button>
+            <button
+              onclick={() => openPlaylet(playlet.id)}
+              ondragover={(e) => e.preventDefault()}
+              class="flex flex-1 flex-col text-left"
+            >
+              <!-- Colored pipeline text -->
+              <div class="flex items-center justify-between gap-2 pr-4 py-4">
+                <div class="flex flex-wrap items-center gap-x-1.5 text-sm font-bold">
+                  <!-- Trigger details -->
+                  {#each details as part, i}
+                    {#if i > 0}
+                      <span class="text-[var(--color-text-muted)]">·</span>
+                    {/if}
+                    <span style="color: {part.color};">{part.text}</span>
+                  {/each}
+                  <!-- Arrow to actions -->
+                  {#if phrases.length > 0}
+                    <span class="text-[var(--color-text-muted)]">→</span>
+                  {/if}
+                  <!-- Action phrases -->
+                  {#each phrases as phrase, i}
+                    {#if i > 0}
+                      <span class="text-[var(--color-text-muted)]">→</span>
+                    {/if}
+                    <span style="color: {phrase.color};">{phrase.text}</span>
+                  {/each}
+                </div>
+                <span class="shrink-0 text-lg font-black {activeTaskCount(playlet.id) > 0 ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}">
+                  {activeTaskCount(playlet.id)}
+                </span>
+              </div>
+            </button>
+          </div>
+        </div>
+      {/each}
+      <!-- Drop indicator at the end -->
+      {#if dropTargetIndex === playletsState.playlets.length && dragFromIndex !== null && dragFromIndex !== playletsState.playlets.length - 1}
+        <div class="h-0.5 rounded-full bg-[var(--color-primary)]"></div>
+      {/if}
+    </div>
+
     <button
       onclick={handleNewPlaylet}
-      class="flex flex-col overflow-hidden rounded-xl bg-[var(--color-bg-secondary)] text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-tertiary)]"
+      class="flex items-center gap-1 text-xs font-medium text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
     >
-      <div class="px-3 py-3">
-        <div class="flex flex-col items-center gap-1 px-3 py-2">
-          <Plus class="h-7 w-7" />
-          <span class="text-xs font-black">New playlet</span>
-        </div>
-      </div>
+      <Plus class="h-3.5 w-3.5" />
+      New playlet
     </button>
   </div>
 
-  <!-- Drop-target legend -->
-  <p class="mt-4 text-center text-xs text-[var(--color-text-muted)]">
-    Drop a torrent on a playlet to start
-  </p>
 </div>
 
 {#if ctx.state}
@@ -306,7 +382,7 @@
     onkeydown={(e) => { if (e.key === "Escape") closeTemplatePicker(); }}
   >
     <div
-      class="{closingTemplatePicker ? 'sidebar-slide-out' : 'sidebar-slide-in'} flex h-full w-full max-w-md flex-col border-l border-[var(--color-border)] bg-[var(--color-bg)] shadow-2xl"
+      class="{closingTemplatePicker ? 'sidebar-slide-out' : 'sidebar-slide-in'} flex h-full w-full sm:max-w-md flex-col border-l border-[var(--color-border)] bg-[var(--color-bg)] shadow-2xl"
       onclick={(e) => e.stopPropagation()}
     >
       <!-- Header -->
@@ -326,39 +402,32 @@
         <div class="space-y-2">
           {#each playletTemplates as template}
             {@const pseudo = templateAsPlaylet(template)}
-            {@const tIcons = buildTriggerIcons(pseudo)}
             {@const tDetails = triggerDetails(pseudo)}
-            {@const tActions = buildActionBlocks(pseudo)}
+            {@const tPhrases = buildActionPhrases(pseudo)}
             <button
               onclick={() => createFromTemplate(template)}
               class="flex w-full flex-col rounded-xl bg-[var(--color-bg-secondary)] px-4 py-3 text-left transition-colors hover:bg-[var(--color-bg-tertiary)]"
             >
-              <!-- Mini-blocks strip -->
-              <div class="relative mb-2 flex flex-wrap items-end gap-x-2 gap-y-3" use:flowConnector>
-                <div data-flow-block class="flex flex-col items-center gap-1 rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 px-2 py-1.5">
-                  <div class="flex items-center gap-1">
-                    {#each tIcons as ti}
-                      {@const Icon = ti.icon as Component}
-                      <Icon style="color: {ti.color};" class="h-4 w-4 shrink-0" />
-                    {/each}
-                  </div>
-                  <div class="flex items-center gap-1 text-[10px] font-bold">
-                    {#each tDetails as part, i}
-                      {#if i > 0}
-                        <span class="text-[var(--color-text-muted)]">·</span>
-                      {/if}
-                      <span style="color: {part.color};">{part.text}</span>
-                    {/each}
-                  </div>
-                </div>
-                {#each tActions as act}
-                  <div data-flow-block>
-                    <ActionBlock icon={act.icon} color={act.color} label={act.label} size="sm" />
-                  </div>
-                {/each}
-              </div>
               <span class="text-sm font-bold text-[var(--color-text)]">{template.name}</span>
               <span class="text-xs text-[var(--color-text-muted)]">{template.description}</span>
+              <!-- Colored pipeline text -->
+              <div class="mt-2 flex flex-wrap items-center gap-x-1.5 text-sm font-bold">
+                {#each tDetails as part, i}
+                  {#if i > 0}
+                    <span class="text-[var(--color-text-muted)]">·</span>
+                  {/if}
+                  <span style="color: {part.color};">{part.text}</span>
+                {/each}
+                {#if tPhrases.length > 0}
+                  <span class="text-[var(--color-text-muted)]">→</span>
+                {/if}
+                {#each tPhrases as phrase, i}
+                  {#if i > 0}
+                    <span class="text-[var(--color-text-muted)]">→</span>
+                  {/if}
+                  <span style="color: {phrase.color};">{phrase.text}</span>
+                {/each}
+              </div>
             </button>
           {/each}
           <button

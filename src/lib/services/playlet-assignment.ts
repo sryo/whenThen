@@ -23,6 +23,35 @@ export function shouldSkipAutoAssign(): boolean {
   return false;
 }
 
+/** Score a playlet based on specificity. Higher = more specific. */
+function scorePlaylet(p: Playlet): number {
+  let score = 0;
+
+  // Conditions (2 points each, more specific operators get bonus)
+  for (const c of p.conditions) {
+    score += 2;
+    if (c.operator === "equals") score += 1;
+    if (c.field === "name" && c.operator === "regex") score += 1;
+  }
+
+  // File filter specificity
+  if (p.fileFilter) {
+    switch (p.fileFilter.category) {
+      case "custom": score += 3; break;
+      case "video": case "audio": case "subtitle": score += 2; break;
+      case "all": score += 1; break;
+    }
+    if (p.fileFilter.selectLargest) score += 1;
+    if (p.fileFilter.minSizeMb) score += 1;
+  }
+
+  // Trigger specificity
+  if (p.trigger.type === "folder_watch" && p.trigger.watchFolder) score += 2;
+  if (p.trigger.type === "seeding_ratio") score += 1;
+
+  return score;
+}
+
 /** Find the best-matching playlet for a torrent based on conditions and specificity. */
 export function findBestMatch(
   torrentName: string,
@@ -39,7 +68,7 @@ export function findBestMatch(
 
   for (const p of eligible) {
     if (!playletsState.matchesConditions(p, torrentName, totalBytes, fileCount)) continue;
-    const score = p.conditions.length + (p.fileFilter ? 1 : 0);
+    const score = scorePlaylet(p);
     if (score > bestScore) {
       bestScore = score;
       best = p;

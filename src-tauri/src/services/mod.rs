@@ -6,3 +6,4 @@ pub mod subtitle_handler;
 pub mod opensub_client;
 pub mod subtitle_search;
 pub mod folder_watcher;
+pub mod rss;

@@ -412,6 +412,18 @@ export const playletsState = {
     persistPlaylets();
   },
 
+  reorderPlaylet(fromIndex: number, toIndex: number) {
+    if (fromIndex < 0 || fromIndex >= playlets.length) return;
+    if (toIndex < 0 || toIndex >= playlets.length) return;
+    if (fromIndex === toIndex) return;
+
+    const arr = [...playlets];
+    const [moved] = arr.splice(fromIndex, 1);
+    arr.splice(toIndex, 0, moved);
+    playlets = arr;
+    persistPlaylets();
+  },
+
   // Condition CRUD
   addCondition(playletId: string, field: ConditionField = "name", operator: ConditionOperator = "contains") {
     const idx = playlets.findIndex((r) => r.id === playletId);

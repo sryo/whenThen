@@ -6,6 +6,7 @@ import { uiState } from "$lib/state/ui.svelte";
 import { tasksState } from "$lib/state/tasks.svelte";
 import { tryExecuteNext } from "./execution-pipeline";
 import { assignTorrentToPlaylet, findBestMatch, shouldSkipAutoAssign } from "./playlet-assignment";
+import { initNotifications, notifyDownloadComplete, notifyRssMatch } from "./notifications";
 import type {
   DeviceFoundEvent,
   DeviceLostEvent,
@@ -19,6 +20,8 @@ import type { TorrentAddedResponse } from "$lib/types/torrent";
 let unlisteners: (() => void)[] = [];
 
 export async function setupEventListeners() {
+  // Initialize notifications
+  await initNotifications();
   // Chromecast events
   unlisteners.push(
     await listen<DeviceFoundEvent>("chromecast:device-found", (event) => {
@@ -149,9 +152,15 @@ export async function setupEventListeners() {
   );
 
   unlisteners.push(
-    await listen<number>("torrent:completed", (event) => {
+    await listen<number>("torrent:completed", async (event) => {
       const torrentId = event.payload;
       uiState.addToast("Download finished", "success");
+
+      // Send native notification
+      const torrent = torrentsState.torrents.find((t) => t.id === torrentId);
+      if (torrent) {
+        await notifyDownloadComplete(torrent.name);
+      }
 
       // Trigger execution pipeline if a task exists for this torrent
       const task = tasksState.getByTorrentId(torrentId);
@@ -165,6 +174,17 @@ export async function setupEventListeners() {
     await listen<{ id: number; error: string }>("torrent:error", (event) => {
       uiState.addToast(`Download failed: ${event.payload.error}`, "error");
     }),
+  );
+
+  // RSS events
+  unlisteners.push(
+    await listen<{ feed_name: string; title: string; torrent_id: number }>(
+      "rss:match",
+      async (event) => {
+        const { feed_name, title } = event.payload;
+        await notifyRssMatch(feed_name, title);
+      },
+    ),
   );
 
   // Playback events

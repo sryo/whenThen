@@ -7,6 +7,7 @@ use crate::models::{AppConfig, DiscoveredDevice, SubtitleData};
 use crate::services::chromecast_device::ChromecastConnection;
 use crate::services::folder_watcher::FolderWatcherHandle;
 use crate::services::media_server::{MediaServerHandle, TokenEntry};
+use crate::services::rss::RssState;
 
 pub struct AppState {
     pub torrent_session: Arc<RwLock<Option<Arc<librqbit::Session>>>>,
@@ -19,8 +20,11 @@ pub struct AppState {
     pub local_file_tokens: Arc<RwLock<HashMap<String, TokenEntry>>>,
     pub torrent_names: Arc<RwLock<HashMap<usize, String>>>,
     pub folder_watcher: Arc<Mutex<Option<FolderWatcherHandle>>>,
+    pub rss_state: Arc<RssState>,
     /// Set when the app is launched via file association or deep link.
     pub opened_via_url: Arc<AtomicBool>,
+    /// Set when user explicitly requests quit (menu, Cmd+Q).
+    pub quit_requested: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -37,7 +41,9 @@ impl AppState {
             local_file_tokens: Arc::new(RwLock::new(HashMap::new())),
             torrent_names: Arc::new(RwLock::new(HashMap::new())),
             folder_watcher: Arc::new(Mutex::new(None)),
+            rss_state: Arc::new(RssState::new()),
             opened_via_url: Arc::new(AtomicBool::new(false)),
+            quit_requested: Arc::new(AtomicBool::new(false)),
         }
     }
 }

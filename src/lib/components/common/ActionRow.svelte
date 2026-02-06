@@ -24,7 +24,8 @@
     WebhookAction,
   } from "$lib/types/playlet";
   import { devicesState } from "$lib/state/devices.svelte";
-  import { listMediaPlayers } from "$lib/services/tauri-commands";
+  import { listMediaPlayers, checkAutomationPermission } from "$lib/services/tauri-commands";
+  import { uiState } from "$lib/state/ui.svelte";
   import type { MediaPlayer } from "$lib/types/playback";
   import { open } from "@tauri-apps/plugin-dialog";
 
@@ -57,6 +58,7 @@
   } = $props();
 
   let mediaPlayers = $state<MediaPlayer[]>([]);
+  let automationPermissionDenied = $state(false);
 
   onMount(async () => {
     try {
@@ -64,7 +66,27 @@
     } catch {
       // Silently fail if media player detection is unavailable
     }
+
+    // Check automation permission if AppleScript is already selected
+    if (action.type === "automation" && (action as AutomationAction).method === "applescript") {
+      try {
+        await checkAutomationPermission();
+        automationPermissionDenied = false;
+      } catch {
+        automationPermissionDenied = true;
+      }
+    }
   });
+
+  async function requestAutomationPermission() {
+    try {
+      await checkAutomationPermission();
+      automationPermissionDenied = false;
+    } catch {
+      automationPermissionDenied = true;
+      uiState.addToast("Enable Automation in System Settings", "warning");
+    }
+  }
 
   const AUTO_GROUP = new Set(["automation", "webhook"]);
   const isAutoGroup = $derived(AUTO_GROUP.has(action.type));
@@ -97,7 +119,7 @@
     action.type === "webhook" ? "webhook" : (action as AutomationAction).method ?? "shell"
   );
 
-  function switchAutoMethod(method: string) {
+  async function switchAutoMethod(method: string) {
     if (method === "webhook") {
       if (action.type === "webhook") return;
       const newDef = getActionDef("webhook");
@@ -106,6 +128,18 @@
       if (action.type === "automation" && (action as AutomationAction).method === method) return;
       const newDef = getActionDef("automation");
       playletsState.updateAction(playletId, action.id, { type: "automation" as ActionType, ...newDef?.defaultData, method } as any);
+
+      // Request automation permission immediately for AppleScript
+      if (method === "applescript") {
+        try {
+          await checkAutomationPermission();
+          automationPermissionDenied = false;
+        } catch {
+          automationPermissionDenied = true;
+        }
+      } else {
+        automationPermissionDenied = false;
+      }
     }
   }
 
@@ -321,11 +355,19 @@
               oninput={(e) => playletsState.updateAction<AutomationAction>(playletId, action.id, { script: (e.target as HTMLTextAreaElement).value })}
               placeholder='display dialog "Done downloading!"'
               rows={3}
-  
+
               autocapitalize="off"
               spellcheck={false}
               class="w-full rounded-lg bg-black/20 px-2 py-1 text-sm text-white/90 outline-none placeholder:text-white/40 font-mono resize-y"
             ></textarea>
+            {#if automationPermissionDenied}
+              <button
+                onclick={requestAutomationPermission}
+                class="rounded-lg bg-black/30 px-3 py-1.5 text-xs font-medium text-white/90 hover:bg-black/40"
+              >
+                Grant Automation Permission
+              </button>
+            {/if}
           {:else}
             <input
               type="text"

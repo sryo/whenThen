@@ -1,7 +1,7 @@
 {
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main", "tray-panel", "picker"],
+  "description": "Capability for all windows",
+  "windows": ["main", "tray-panel", "picker", "editor"],
   "permissions": [
     "core:default",
     "dialog:default",
@@ -22,6 +22,10 @@
     "core:window:allow-hide",
     "core:window:allow-show",
     "core:window:allow-center",
-    "core:window:allow-set-focus"
+    "core:window:allow-set-focus",
+    "notification:default",
+    "notification:allow-notify",
+    "notification:allow-request-permission",
+    "notification:allow-is-permission-granted"
   ]
 }

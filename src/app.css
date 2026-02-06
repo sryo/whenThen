@@ -110,3 +110,42 @@ svg,
 a {
   -webkit-user-drag: none;
 }
+
+/* Tooltips with traditional positioning */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+  z-index: 1000;
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+}
+
+/* Tooltip positioned to the left (for buttons on right edge) */
+[data-tooltip-left]::after {
+  left: auto;
+  top: 50%;
+  right: 100%;
+  transform: translateY(-50%);
+  margin-top: 0;
+  margin-right: 6px;
+}

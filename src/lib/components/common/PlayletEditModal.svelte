@@ -6,7 +6,6 @@
     Trash2,
     X,
     Link,
-    Filter,
     FileVideo,
     Files,
     Music,
@@ -16,15 +15,12 @@
     ArrowUpDown,
     Captions,
     FolderSearch,
-    Folder,
   } from "lucide-svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import ActionRow from "./ActionRow.svelte";
   import { playletsState, derivePlayletName } from "$lib/state/playlets.svelte";
-  import { torrentsState } from "$lib/state/torrents.svelte";
   import type {
     ActionType,
-    ConditionOperator,
     FileFilterCategory,
     TriggerType,
   } from "$lib/types/playlet";
@@ -54,14 +50,6 @@
     if (!check) return false;
     return playlet.actions.some((a) => check.includes(a.type));
   }
-
-  const operatorLabels: Record<ConditionOperator, string> = {
-    contains: "contains",
-    not_contains: "does not contain",
-    starts_with: "starts with",
-    ends_with: "ends with",
-    equals: "equals",
-  };
 
   const filterCategoryLabels: Record<FileFilterCategory, string> = {
     all: "Any file",
@@ -120,19 +108,10 @@
   }
 
   const playlet = $derived(playletsState.getById(playletId));
-  const hasWhenBlock = $derived(playlet ? playlet.conditions.length > 0 : false);
   const activeFileCategory = $derived(playlet?.fileFilter?.category ?? "all");
   const derivedName = $derived(playlet ? derivePlayletName(playlet) : "");
   const activeTriggerType = $derived(playlet?.trigger?.type ?? "torrent_added");
   const ActiveTriggerIcon = $derived(triggerTypeIcons[activeTriggerType] as unknown as Component);
-
-  // Count existing torrents that match the current Where conditions
-  const matchCount = $derived(() => {
-    if (!playlet) return 0;
-    return torrentsState.torrents.filter((t) =>
-      playletsState.matchesConditions(playlet, t.name, t.total_bytes, t.file_count)
-    ).length;
-  });
 
   function toggleEnabled() {
     if (!playlet) return;
@@ -194,18 +173,6 @@
     playletsState.updatePlaylet(playlet.id, {
       trigger: { ...playlet.trigger, watchFolder: undefined },
     });
-  }
-
-  function addNameCondition() {
-    if (!playlet) return;
-    playletsState.addCondition(playlet.id, "name");
-  }
-
-  function removeWhenBlock() {
-    if (!playlet) return;
-    for (const c of playlet.conditions) {
-      playletsState.removeCondition(playlet.id, c.id);
-    }
   }
 
   function setFilterCategory(category: FileFilterCategory) {
@@ -404,123 +371,10 @@
             {/if}
           </div>
 
-          <!-- Where empty state card -->
-          {#if !hasWhenBlock}
-            <div class="pointer-events-none flex justify-center">
-              <div class="h-4 w-[4px] rounded-full bg-[var(--color-border)]"></div>
-            </div>
-            <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-4">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <h3 class="text-2xl font-black text-[var(--color-text-muted)]">Where</h3>
-                  <Filter class="h-4 w-4 text-[var(--color-text-muted)]" />
-                </div>
-              </div>
-              <button
-                onclick={addNameCondition}
-                class="mt-2 flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
-              >
-                <Plus class="h-3.5 w-3.5" />
-                Add match
-              </button>
-            </div>
-          {/if}
-
           <!-- Connector line -->
           <div class="pointer-events-none flex justify-center">
             <div class="h-4 w-[4px] rounded-full bg-[var(--color-border)]"></div>
           </div>
-
-          <!-- WHERE block (Query - conditions) — only shown when active -->
-          {#if hasWhenBlock}
-            <div class="rounded-xl border border-[var(--color-info)]/30 bg-[var(--color-info)]/5 p-4">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <h3 class="text-2xl font-black text-[var(--color-info)]">Where</h3>
-                  <Filter class="h-4 w-4 text-[var(--color-info)]" />
-                  {#if matchCount() > 0}
-                    <span class="rounded-full bg-[var(--color-info)]/20 px-2 py-0.5 text-xs font-bold text-[var(--color-info)]">
-                      {matchCount()} match{matchCount() === 1 ? "" : "es"}
-                    </span>
-                  {/if}
-                </div>
-                <button
-                  onclick={removeWhenBlock}
-                  class="rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-error)]"
-                  title="Remove matches"
-                >
-                  <Trash2 class="h-4 w-4" />
-                </button>
-              </div>
-
-              <div class="mt-3 space-y-2">
-                {#each playlet.conditions as condition, i (condition.id)}
-                  <div class="flex flex-col gap-1.5">
-                    <div class="flex items-center gap-2">
-                      {#if i === 0}
-                        <span class="w-12 shrink-0 text-xs font-bold text-[var(--color-info)]">Name</span>
-                      {:else}
-                        <button
-                          onclick={() => playletsState.updatePlaylet(playlet.id, { conditionLogic: playlet.conditionLogic === "and" ? "or" : "and" })}
-                          class="w-12 shrink-0 rounded px-1 py-0.5 text-xs font-bold text-[var(--color-info)] hover:bg-[var(--color-info)]/10"
-                          title="Match all or match any"
-                        >
-                          {playlet.conditionLogic === "or" ? "or" : "and"}
-                        </button>
-                      {/if}
-                      <button
-                        onclick={() => playletsState.updateCondition(playlet.id, condition.id, { negate: !condition.negate })}
-                        class="shrink-0 rounded px-1 py-0.5 text-xs font-bold {condition.negate ? 'text-[var(--color-error)]' : 'text-[var(--color-text-muted)]'} hover:bg-[var(--color-bg-tertiary)]"
-                        title="Flip to opposite"
-                      >
-                        {condition.negate ? "not" : "is"}
-                      </button>
-
-                      <select
-                        value={condition.operator}
-                        onchange={(e) => playletsState.updateCondition(playlet.id, condition.id, { operator: (e.target as HTMLSelectElement).value as ConditionOperator })}
-                        class="h-7 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-info)]"
-                      >
-                        {#each Object.entries(operatorLabels) as [op, label]}
-                          <option value={op}>{label}</option>
-                        {/each}
-                      </select>
-                      <input
-                        type="text"
-                        value={condition.value}
-                        oninput={(e) => playletsState.updateCondition(playlet.id, condition.id, { value: (e.target as HTMLInputElement).value })}
-                        placeholder="e.g. 1080p"
-
-                        autocapitalize="off"
-                        spellcheck={false}
-                        class="h-7 min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-info)]"
-                      />
-
-                      <button
-                        onclick={() => playletsState.removeCondition(playlet.id, condition.id)}
-                        class="shrink-0 rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-error)]"
-                      >
-                        <X class="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                {/each}
-              </div>
-
-              <button
-                onclick={() => playletsState.addCondition(playlet.id)}
-                class="mt-2 flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
-              >
-                <Plus class="h-3.5 w-3.5" />
-                Add match
-              </button>
-            </div>
-
-            <!-- Connector line -->
-            <div class="pointer-events-none flex justify-center">
-              <div class="h-4 w-[4px] rounded-full bg-[var(--color-border)]"></div>
-            </div>
-          {/if}
 
           <!-- WITH block (file filter) — always visible, defaults to "any file" -->
           <div class="rounded-xl border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/5 p-4">

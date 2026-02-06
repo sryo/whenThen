@@ -1,6 +1,6 @@
 [package]
 name = "when_then"
-version = "1.0.0"
+version = "26.2.5"
 edition = "2021"
 description = "whenThen - Stream torrents to your Chromecast"
 
@@ -37,3 +37,8 @@ tokio-util = { version = "0.7", features = ["io"] }
 reqwest = { version = "0.12", features = ["json"] }
 notify = "7"
 tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
+tauri-plugin-notification = "2"
+tauri-plugin-single-instance = "2"
+feed-rs = "2"
+regex = "1"
+chrono = "0.4"

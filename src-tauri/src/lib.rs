@@ -1,11 +1,11 @@
 mod commands;
+mod dock;
 mod errors;
 mod models;
 mod services;
 mod state;
 mod tray;
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
 use std::sync::atomic::Ordering;
 
 use models::AppConfig;
@@ -51,6 +51,14 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_positioner::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // Focus main window when second instance is launched
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .manage(app_state)
         .setup(|app| {
             let saved_config = load_saved_config(app);
@@ -77,6 +85,29 @@ pub fn run() {
 
             // Set up tray icon
             tray::setup(app.handle())?;
+
+            // Set up macOS application menu
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{Menu, MenuItem, Submenu, PredefinedMenuItem};
+
+                let app_handle = app.handle();
+                let quit_item = MenuItem::with_id(app_handle, "quit", "Quit whenThen", true, Some("CmdOrCtrl+Q"))?;
+                let hide_item = PredefinedMenuItem::hide(app_handle, Some("Hide whenThen"))?;
+                let hide_others_item = PredefinedMenuItem::hide_others(app_handle, Some("Hide Others"))?;
+                let show_all_item = PredefinedMenuItem::show_all(app_handle, Some("Show All"))?;
+                let separator = PredefinedMenuItem::separator(app_handle)?;
+
+                let app_submenu = Submenu::with_items(
+                    app_handle,
+                    "whenThen",
+                    true,
+                    &[&hide_item, &hide_others_item, &show_all_item, &separator, &quit_item],
+                )?;
+
+                let menu = Menu::with_items(app_handle, &[&app_submenu])?;
+                app.set_menu(menu)?;
+            }
 
             // Close = hide main window (background mode)
             if let Some(main_window) = app.get_webview_window("main") {
@@ -105,7 +136,9 @@ pub fn run() {
             }
 
             let folder_watcher = state.folder_watcher.clone();
+            let rss_state = state.rss_state.clone();
             let app_handle_for_watcher = app.handle().clone();
+            let app_handle_for_rss = app.handle().clone();
 
             tauri::async_runtime::spawn(async move {
                 let cfg = config.read().await;
@@ -140,6 +173,11 @@ pub fn run() {
                         *folder_watcher.lock().await = Some(handle);
                     }
                 }
+
+                // Start RSS polling service
+                let rss_handle = services::rss::start_service(app_handle_for_rss, rss_state.clone());
+                *rss_state.service_handle.lock().await = Some(rss_handle);
+                info!("RSS service ready");
             });
 
             Ok(())
@@ -197,9 +235,40 @@ pub fn run() {
             commands::associations::check_file_associations,
             commands::associations::set_default_for_torrents,
             commands::associations::set_default_for_magnets,
+            // RSS source commands
+            commands::rss::rss_add_source,
+            commands::rss::rss_update_source,
+            commands::rss::rss_remove_source,
+            commands::rss::rss_list_sources,
+            commands::rss::rss_toggle_source,
+            // RSS interest commands
+            commands::rss::rss_add_interest,
+            commands::rss::rss_update_interest,
+            commands::rss::rss_remove_interest,
+            commands::rss::rss_list_interests,
+            commands::rss::rss_toggle_interest,
+            commands::rss::rss_test_interest,
+            // RSS screener commands
+            commands::rss::rss_list_pending,
+            commands::rss::rss_pending_count,
+            commands::rss::rss_fetch_metadata,
+            commands::rss::rss_approve_match,
+            commands::rss::rss_reject_match,
         ])
         .build(tauri::generate_context!())
         .expect("error while building whenThen");
+
+    // Register macOS menu event handler after build
+    #[cfg(target_os = "macos")]
+    {
+        app.on_menu_event(|app_handle, event| {
+            if event.id().as_ref() == "quit" {
+                let state = app_handle.state::<AppState>();
+                state.quit_requested.store(true, Ordering::SeqCst);
+                app_handle.exit(0);
+            }
+        });
+    }
 
     app.run(|app_handle, event| {
         match event {
@@ -207,8 +276,13 @@ pub fn run() {
             RunEvent::Opened { urls } => {
                 handle_opened_urls(app_handle, urls);
             }
-            RunEvent::ExitRequested { .. } => {
-                handle_shutdown(app_handle);
+            RunEvent::ExitRequested { api, .. } => {
+                let state = app_handle.state::<AppState>();
+                if state.quit_requested.load(Ordering::SeqCst) {
+                    handle_shutdown(app_handle);
+                } else {
+                    api.prevent_exit();
+                }
             }
             _ => {}
         }
