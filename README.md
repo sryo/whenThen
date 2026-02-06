@@ -1,6 +1,6 @@
-# whenThen
+# When ♒︎
 
-Small when→then automations for your torrents. Like applets, but for downloads. We call them playlets.
+Torrent automation with playlets — small when→then rules for your downloads.
 
 - When a torrent name contains "1080p", cast it to the living room TV.
 - When a torrent name starts with "OST", move it to your music folder.

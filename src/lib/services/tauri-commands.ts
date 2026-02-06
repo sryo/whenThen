@@ -89,16 +89,8 @@ export async function chromecastStartDiscovery(): Promise<void> {
   return invoke("chromecast_start_discovery");
 }
 
-export async function chromecastStopDiscovery(): Promise<void> {
-  return invoke("chromecast_stop_discovery");
-}
-
 export async function chromecastConnect(deviceId: string): Promise<void> {
-  return invokeWithTimeout("chromecast_connect", { deviceId }, 15_000);
-}
-
-export async function chromecastDisconnect(deviceId: string): Promise<void> {
-  return invoke("chromecast_disconnect", { deviceId });
+  return invoke("chromecast_connect", { deviceId });
 }
 
 // Playback commands
@@ -117,6 +109,7 @@ export async function playbackCastLocalFile(
   return invoke("playback_cast_local_file", { deviceId, filePath });
 }
 
+// Playback control commands
 export async function playbackPlay(deviceId: string): Promise<void> {
   return invoke("playback_play", { deviceId });
 }
@@ -129,31 +122,12 @@ export async function playbackStop(deviceId: string): Promise<void> {
   return invoke("playback_stop", { deviceId });
 }
 
-export async function playbackSeek(
-  deviceId: string,
-  positionSecs: number,
-): Promise<void> {
-  return invoke("playback_seek", { deviceId, positionSecs });
+export async function playbackSeek(deviceId: string, position: number): Promise<void> {
+  return invoke("playback_seek", { deviceId, position });
 }
 
-export async function playbackSeekRelative(
-  deviceId: string,
-  deltaSecs: number,
-): Promise<void> {
-  return invoke("playback_seek_relative", { deviceId, deltaSecs });
-}
-
-export async function playbackSetVolume(
-  deviceId: string,
-  volume: number,
-): Promise<void> {
+export async function playbackSetVolume(deviceId: string, volume: number): Promise<void> {
   return invoke("playback_set_volume", { deviceId, volume });
-}
-
-export async function playbackGetStatus(
-  deviceId: string,
-): Promise<import("$lib/types/playback").PlaybackStatusResponse> {
-  return invoke("playback_get_status", { deviceId });
 }
 
 // Local playback commands
@@ -175,14 +149,6 @@ export async function moveTorrentFiles(
   destination: string,
 ): Promise<void> {
   return invoke("move_torrent_files", { torrentId, destination });
-}
-
-// File selection commands
-export async function torrentUpdateFiles(
-  id: number,
-  onlyFiles: number[],
-): Promise<TorrentAddedResponse> {
-  return invokeWithTimeout("torrent_update_files", { id, onlyFiles }, 60_000);
 }
 
 // Media commands
@@ -223,9 +189,10 @@ export async function runShellCommand(command: string): Promise<string> {
   return invoke("run_shell_command", { command });
 }
 
-// Rename commands
-export async function renameTorrentFiles(torrentId: number, renames: [number, string][]): Promise<void> {
-  return invoke("torrent_rename_files", { torrentId, renames });
+export async function openSystemSettings(panel: string): Promise<void> {
+  // Opens macOS System Settings to a specific panel
+  // panel examples: "Privacy_Automation", "Privacy_Accessibility"
+  await runShellCommand(`open "x-apple.systempreferences:com.apple.preference.security?${panel}"`);
 }
 
 // Association commands
@@ -260,4 +227,16 @@ export async function settingsUpdate(
   config: AppSettings,
 ): Promise<AppSettings> {
   return invoke("settings_update", { config });
+}
+
+// i18n commands
+export async function getTranslations(
+  locale?: string,
+): Promise<Record<string, Record<string, string>>> {
+  return invoke("get_translations", { locale: locale ?? null });
+}
+
+// Demo/screenshot commands
+export async function rssSeedDemo(): Promise<void> {
+  return invoke("rss_seed_demo");
 }

@@ -23,7 +23,7 @@ pub async fn check_automation_permission() -> Result<String> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         if stderr.contains("-10000") || stderr.contains("errAEEventNotPermitted") {
             Err(WhenThenError::Internal(
-                "Automation permission required. Open System Settings > Privacy & Security > Automation and enable whenThen.".into(),
+                "Automation permission required. Open System Settings > Privacy & Security > Automation and enable When.".into(),
             ))
         } else {
             let code = output.status.code().unwrap_or(-1);

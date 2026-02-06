@@ -3,7 +3,7 @@ import type { Component, ComponentType, SvelteComponent } from "svelte";
 // lucide-svelte exports Svelte 4 class components; this union accepts both styles
 export type IconType = Component | ComponentType<SvelteComponent<any>>;
 
-export type ViewName = "editor";
+export type ViewName = "inbox" | "rules" | "settings";
 
 export interface Toast {
   id: string;

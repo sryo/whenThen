@@ -1,0 +1,27 @@
+{
+  "config": {
+    "download_directory": "",
+    "theme": "system",
+    "color_scheme": "auto",
+    "auto_discover": true,
+    "max_download_speed": 0,
+    "max_upload_speed": 0,
+    "media_server_port": 9080,
+    "auto_play_next": true,
+    "subtitle_languages": ["en"],
+    "opensubtitles_api_key": "",
+    "enable_upnp": true,
+    "listen_port": 4240,
+    "watch_folders": [],
+    "watch_folders_enabled": false,
+    "incomplete_directory": "",
+    "max_concurrent_tasks": 0,
+    "delete_torrent_file_on_add": false,
+    "show_tray_icon": true,
+    "default_cast_device": "",
+    "default_media_player": "",
+    "default_move_destination": "",
+    "rss_check_interval_minutes": 15,
+    "locale": "en"
+  }
+}

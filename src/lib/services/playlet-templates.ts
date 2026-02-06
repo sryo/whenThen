@@ -1,5 +1,6 @@
 // Starter playlet templates for quick setup.
 import type { Playlet, Action, TriggerConfig, FileFilter } from "$lib/types/playlet";
+import { t } from "$lib/i18n";
 
 export interface PlayletTemplate {
   name: string;
@@ -30,42 +31,47 @@ tell application "System Events"
 \tend if
 end tell`;
 
-export const playletTemplates: PlayletTemplate[] = [
-  {
-    name: "Movie Night",
-    description: "Sit back — subtitles grabbed, TV starts playing",
-    trigger: { type: "torrent_added" },
-    actions: [
-      action("cast", { deviceId: null }),
-      action("subtitle", { languages: ["en"] }),
-    ],
-    fileFilter: { category: "video", customExtensions: [], selectLargest: true },
-  },
-  {
-    name: "Organize Media",
-    description: "No mess — files get renamed, sorted, and subbed automatically",
-    trigger: { type: "torrent_added" },
-    actions: [
-      action("automation", {
-        method: "applescript",
-        shortcutName: "",
-        script: RENAME_CLEAN_SCRIPT,
-      }),
-      action("move", { destination: "" }),
-      action("subtitle", { languages: ["en"] }),
-    ],
-    fileFilter: { category: "video", customExtensions: [] },
-  },
-  {
-    name: "Seed & Notify",
-    description: "Be a good peer — get notified when you've seeded enough",
-    trigger: { type: "seeding_ratio", seedingRatio: 2.0 },
-    actions: [
-      action("notify", { method: "system" }),
-    ],
-    fileFilter: null,
-  },
-];
+export function getPlayletTemplates(): PlayletTemplate[] {
+  return [
+    {
+      name: t("templates.watchNow.name"),
+      description: t("templates.watchNow.description"),
+      trigger: { type: "torrent_added" },
+      actions: [
+        action("subtitle", { languages: ["en"] }),
+        action("cast", { deviceId: null }),
+      ],
+      fileFilter: { category: "video", customExtensions: [], selectLargest: true },
+    },
+    {
+      name: t("templates.organizeVideos.name"),
+      description: t("templates.organizeVideos.description"),
+      trigger: { type: "download_complete" },
+      actions: [
+        action("automation", {
+          method: "applescript",
+          shortcutName: "",
+          script: RENAME_CLEAN_SCRIPT,
+        }),
+        action("move", { destination: "" }),
+        action("subtitle", { languages: ["en"] }),
+      ],
+      fileFilter: { category: "video", customExtensions: [] },
+    },
+    {
+      name: t("templates.goodSeeder.name"),
+      description: t("templates.goodSeeder.description"),
+      trigger: { type: "seeding_ratio", seedingRatio: 2.0 },
+      actions: [
+        action("notify", { method: "system" }),
+      ],
+      fileFilter: null,
+    },
+  ];
+}
+
+/** @deprecated Use getPlayletTemplates() instead */
+export const playletTemplates: PlayletTemplate[] = [];
 
 export function createPlayletFromTemplate(template: PlayletTemplate): Playlet {
   return {

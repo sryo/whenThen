@@ -9,6 +9,7 @@
     Play,
     HelpCircle,
     GripVertical,
+    Check,
   } from "lucide-svelte";
   import { playletsState } from "$lib/state/playlets.svelte";
   import ContextMenu from "$lib/components/common/ContextMenu.svelte";
@@ -24,9 +25,10 @@
   import InterestsSection from "$lib/components/common/InterestsSection.svelte";
   import { settingsState } from "$lib/state/settings.svelte";
   import type { Action } from "$lib/types/playlet";
-  import { playletTemplates, createPlayletFromTemplate } from "$lib/services/playlet-templates";
+  import { getPlayletTemplates, createPlayletFromTemplate } from "$lib/services/playlet-templates";
   import type { PlayletTemplate } from "$lib/services/playlet-templates";
   import { triggerDetails, buildActionPhrases } from "$lib/utils/playlet-display";
+  import { i18n } from "$lib/i18n/state.svelte";
 
   // Convert a template to a pseudo-Playlet so we can reuse the block builders
   function templateAsPlaylet(t: PlayletTemplate): Playlet {
@@ -53,6 +55,14 @@
   let removingCardId = $state<string | null>(null);
   let showTemplatePicker = $state(false);
   let closingTemplatePicker = $state(false);
+  let savedRecently = $state(false);
+  let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  function showSaved() {
+    savedRecently = true;
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => { savedRecently = false; }, 1500);
+  }
 
   // Drag-to-reorder state
   let dragFromIndex = $state<number | null>(null);
@@ -67,12 +77,12 @@
     return [
       {
         icon: p.enabled ? ToggleRight : ToggleLeft,
-        label: p.enabled ? "Disable" : "Enable",
+        label: p.enabled ? i18n.t("common.disable") : i18n.t("common.enable"),
         action: () => playletsState.updatePlaylet(playletId, { enabled: !p.enabled }),
       },
       {
         icon: Copy,
-        label: "Duplicate",
+        label: i18n.t("common.duplicate"),
         action: () => {
           const dup = playletsState.duplicatePlaylet(playletId);
           if (dup) {
@@ -84,7 +94,7 @@
       { type: "divider" as const, },
       {
         icon: Trash2,
-        label: "Delete",
+        label: i18n.t("common.delete"),
         danger: true,
         hidden: playletsState.count <= 1,
         action: () => {
@@ -134,9 +144,15 @@
   }
 
   function closeModal(newPlayletId?: string) {
+    // Show saved indicator if we're closing an edit (not deleting an empty playlet)
+    const wasEditing = editingPlayletId;
     editingPlayletId = null;
     if (newPlayletId) {
       newCardIds = new Set([...newCardIds, newPlayletId]);
+    }
+    // Only show saved if the playlet still exists (wasn't removed due to being empty)
+    if (wasEditing && playletsState.getById(wasEditing)) {
+      showSaved();
     }
   }
 
@@ -252,7 +268,7 @@
 
   <!-- Connector line -->
   <div class="pointer-events-none flex justify-center">
-    <div class="h-4 w-[4px] rounded-full bg-[var(--color-border)]"></div>
+    <div class="h-4 w-[4px] bg-[var(--color-border)]"></div>
   </div>
 
   <!-- Interests section -->
@@ -260,19 +276,27 @@
 
   <!-- Connector line -->
   <div class="pointer-events-none flex justify-center">
-    <div class="h-4 w-[4px] rounded-full bg-[var(--color-border)]"></div>
+    <div class="h-4 w-[4px] bg-[var(--color-border)]"></div>
   </div>
 
   <!-- Do section -->
   <div class="space-y-3 rounded-xl border border-[var(--color-success)]/30 bg-[var(--color-success)]/5 p-4">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <h3 class="text-2xl font-black text-[var(--color-success)]">Do</h3>
+        <h3 class="text-2xl font-black text-[var(--color-success)]">{i18n.t("playlets.do")}</h3>
         <Play class="h-4 w-4 text-[var(--color-success)]" />
+        {#if savedRecently}
+          {#key Date.now()}
+            <span class="flex items-center gap-1 text-xs text-[var(--color-success)] animate-fade-in-out">
+              <Check class="h-3 w-3" />
+              {i18n.t("common.saved")}
+            </span>
+          {/key}
+        {/if}
       </div>
       <button
         class="text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-        data-tooltip="What happens when we catch something you like."
+        data-tooltip={i18n.t("playlets.doTooltip")}
         data-tooltip-left
       >
         <HelpCircle class="h-4 w-4" />
@@ -358,7 +382,7 @@
       class="flex items-center gap-1 text-xs font-medium text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
     >
       <Plus class="h-3.5 w-3.5" />
-      New playlet
+      {i18n.t("playlets.newPlaylet")}
     </button>
   </div>
 
@@ -375,7 +399,7 @@
   <div
     role="dialog"
     aria-modal="true"
-    aria-label="Choose a template"
+    aria-label={i18n.t("modal.chooseTemplate")}
     tabindex="-1"
     class="fixed inset-0 z-50 flex justify-end {closingTemplatePicker ? 'backdrop-fade-out' : 'backdrop-fade-in'}"
     onclick={(e) => { if (e.target === e.currentTarget) closeTemplatePicker(); }}
@@ -387,7 +411,7 @@
     >
       <!-- Header -->
       <div class="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-5 py-4">
-        <span class="text-lg font-bold text-[var(--color-text)]">New playlet</span>
+        <span class="text-lg font-bold text-[var(--color-text)]">{i18n.t("playlets.newPlayletTitle")}</span>
         <button
           onclick={closeTemplatePicker}
           class="ml-3 shrink-0 rounded-lg p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
@@ -398,9 +422,9 @@
 
       <!-- Scrollable content -->
       <div class="min-h-0 flex-1 overflow-y-auto p-5">
-        <p class="mb-4 text-xs text-[var(--color-text-muted)]">Playlets are tiny apps that do things with your torrents.</p>
+        <p class="mb-4 text-xs text-[var(--color-text-muted)]">{i18n.t("playlets.playletsAutomate")}</p>
         <div class="space-y-2">
-          {#each playletTemplates as template}
+          {#each getPlayletTemplates() as template}
             {@const pseudo = templateAsPlaylet(template)}
             {@const tDetails = triggerDetails(pseudo)}
             {@const tPhrases = buildActionPhrases(pseudo)}
@@ -434,8 +458,8 @@
             onclick={createBlankPlaylet}
             class="flex w-full flex-col rounded-xl bg-[var(--color-bg-secondary)] px-4 py-3 text-left transition-colors hover:bg-[var(--color-bg-tertiary)]"
           >
-            <span class="text-sm font-bold text-[var(--color-text)]">Blank playlet</span>
-            <span class="text-xs text-[var(--color-text-muted)]">Start from scratch</span>
+            <span class="text-sm font-bold text-[var(--color-text)]">{i18n.t("playlets.blankPlaylet")}</span>
+            <span class="text-xs text-[var(--color-text-muted)]">{i18n.t("playlets.blankDescription")}</span>
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <label
@@ -448,7 +472,7 @@
                 onchange={(e) => settingsState.updateAndSave({ skip_template_picker: (e.target as HTMLInputElement).checked })}
                 class="rounded"
               />
-              Always create blank
+              {i18n.t("playlets.alwaysCreateBlank")}
             </label>
           </button>
         </div>

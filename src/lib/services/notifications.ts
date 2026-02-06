@@ -5,6 +5,7 @@ import {
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
+import { t } from "$lib/i18n";
 
 let permissionGranted = false;
 
@@ -17,7 +18,7 @@ export async function initNotifications(): Promise<boolean> {
   return permissionGranted;
 }
 
-export async function notify(title: string, body?: string): Promise<void> {
+async function notify(title: string, body?: string): Promise<void> {
   if (!permissionGranted) {
     await initNotifications();
   }
@@ -27,20 +28,9 @@ export async function notify(title: string, body?: string): Promise<void> {
 }
 
 export async function notifyRssMatch(feedName: string, title: string): Promise<void> {
-  await notify(`New match: ${feedName}`, title);
-}
-
-export async function notifyDownloadStarted(name: string): Promise<void> {
-  await notify("Download started", name);
+  await notify(t("notifications.newMatch", { feedName }), title);
 }
 
 export async function notifyDownloadComplete(name: string): Promise<void> {
-  await notify("Download complete", name);
-}
-
-export async function notifyActionsComplete(name: string, actionCount: number): Promise<void> {
-  await notify(
-    "Actions complete",
-    `${name} - ${actionCount} action${actionCount !== 1 ? "s" : ""} executed`,
-  );
+  await notify(t("notifications.downloadComplete"), name);
 }

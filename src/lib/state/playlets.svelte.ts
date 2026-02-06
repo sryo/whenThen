@@ -35,38 +35,14 @@ async function wereDefaultsSeeded(): Promise<boolean> {
   return (await store.get<boolean>("defaultsSeeded")) === true;
 }
 
-const defaultTrigger: TriggerConfig = { type: "torrent_added" };
-
 function defaultPlaylets(): Playlet[] {
   return [
     {
       id: crypto.randomUUID(),
       name: "",
       enabled: true,
-      trigger: { ...defaultTrigger },
-      actions: [createAction("move"), createAction("notify")],
-      conditions: [],
-      conditionLogic: "and",
-      fileFilter: { category: "video", customExtensions: [] },
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: crypto.randomUUID(),
-      name: "",
-      enabled: true,
-      trigger: { ...defaultTrigger },
-      actions: [createAction("move"), createAction("notify")],
-      conditions: [],
-      conditionLogic: "and",
-      fileFilter: { category: "audio", customExtensions: [] },
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: crypto.randomUUID(),
-      name: "",
-      enabled: true,
-      trigger: { ...defaultTrigger },
-      actions: [createAction("cast")],
+      trigger: { type: "download_complete" },
+      actions: [createAction("notify")],
       conditions: [],
       conditionLogic: "and",
       fileFilter: null,

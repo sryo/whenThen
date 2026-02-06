@@ -38,6 +38,19 @@ pub struct AppConfig {
     pub default_media_player: String,
     #[serde(default)]
     pub default_move_destination: String,
+    /// RSS feed check interval in minutes (default 15)
+    #[serde(default = "default_rss_interval")]
+    pub rss_check_interval_minutes: u32,
+    #[serde(default = "default_locale")]
+    pub locale: String,
+}
+
+fn default_rss_interval() -> u32 {
+    15
+}
+
+fn default_locale() -> String {
+    "system".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -89,6 +102,8 @@ impl Default for AppConfig {
             default_cast_device: String::new(),
             default_media_player: String::new(),
             default_move_destination: String::new(),
+            rss_check_interval_minutes: default_rss_interval(),
+            locale: default_locale(),
         }
     }
 }

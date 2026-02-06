@@ -34,6 +34,7 @@
   import ContextMenu from "$lib/components/common/ContextMenu.svelte";
   import { useContextMenu } from "$lib/utils";
   import type { ContextMenuEntry } from "$lib/types/ui";
+  import { i18n } from "$lib/i18n/state.svelte";
 
   let {
     action,
@@ -84,7 +85,7 @@
       automationPermissionDenied = false;
     } catch {
       automationPermissionDenied = true;
-      uiState.addToast("Enable Automation in System Settings", "warning");
+      uiState.addToast(i18n.t("actions.enableAutomationSettings"), "warning");
     }
   }
 
@@ -103,17 +104,17 @@
 
   const configLabel = $derived(
     isAutoGroup
-      ? (action.type === "webhook" ? "Send to" : "Run")
+      ? (action.type === "webhook" ? i18n.t("actions.sendTo") : i18n.t("actions.run"))
       : (def?.configLabel ?? action.type)
   );
 
   // Automation group: shell/applescript/shortcut come from automation.method, webhook is a separate type
-  const autoMethodLabels: { key: string; label: string }[] = [
-    { key: "shell", label: "Shell" },
-    { key: "applescript", label: "AppleScript" },
-    { key: "shortcut", label: "Shortcut" },
-    { key: "webhook", label: "Webhook" },
-  ];
+  const autoMethodLabels = $derived([
+    { key: "shell", label: i18n.t("actions.shell") },
+    { key: "applescript", label: i18n.t("actions.applescript") },
+    { key: "shortcut", label: i18n.t("actions.shortcut") },
+    { key: "webhook", label: i18n.t("actions.webhookLabel") },
+  ]);
 
   const activeAutoMethod = $derived(
     action.type === "webhook" ? "webhook" : (action as AutomationAction).method ?? "shell"
@@ -176,13 +177,13 @@
     playletsState.updateAction<SubtitleAction>(playletId, action.id, { languages: langs });
   }
 
-  const delayUnits: { value: DelayUnit; label: string }[] = [
-    { value: "seconds", label: "sec" },
-    { value: "minutes", label: "min" },
-    { value: "days", label: "days" },
-    { value: "weeks", label: "weeks" },
-    { value: "months", label: "months" },
-  ];
+  const delayUnits = $derived([
+    { value: "seconds" as DelayUnit, label: i18n.t("actions.delaySeconds") },
+    { value: "minutes" as DelayUnit, label: i18n.t("actions.delayMinutes") },
+    { value: "days" as DelayUnit, label: i18n.t("actions.delayDays") },
+    { value: "weeks" as DelayUnit, label: i18n.t("actions.delayWeeks") },
+    { value: "months" as DelayUnit, label: i18n.t("actions.delayMonths") },
+  ]);
 
   const ctx = useContextMenu();
 
@@ -190,25 +191,25 @@
     return [
       {
         icon: Copy,
-        label: "Duplicate",
+        label: i18n.t("common.duplicate"),
         action: () => onDuplicate?.(),
       },
       {
         icon: Trash2,
-        label: "Remove",
+        label: i18n.t("common.remove"),
         danger: true,
         action: () => playletsState.removeAction(playletId, action.id),
       },
       { type: "divider" },
       {
         icon: ArrowUp,
-        label: "Move Up",
+        label: i18n.t("common.moveUp"),
         disabled: index === 0,
         action: () => onMoveUp?.(),
       },
       {
         icon: ArrowDown,
-        label: "Move Down",
+        label: i18n.t("common.moveDown"),
         disabled: index >= totalActions - 1,
         action: () => onMoveDown?.(),
       },
@@ -232,7 +233,7 @@
     }}
   >
     <div class="flex items-center gap-2">
-      <h3 class="text-2xl font-black text-white drop-shadow-sm">{isFirst ? "Then" : "And"}</h3>
+      <h3 class="text-2xl font-black text-white drop-shadow-sm">{isFirst ? i18n.t("playlets.then") : i18n.t("playlets.and")}</h3>
       {#if Icon}
         <Icon class="h-5 w-5 text-white/70" />
       {/if}
@@ -241,7 +242,7 @@
       <button
         onclick={() => playletsState.removeAction(playletId, action.id)}
         class="rounded p-1 text-white/40 hover:text-white"
-        title="Remove"
+        title={i18n.t("common.remove")}
       >
         <Trash2 class="h-4 w-4" />
       </button>
@@ -269,7 +270,7 @@
       {#if action.type === "cast"}
         {#if devicesState.devices.length === 0}
           <span class="flex h-8 items-center rounded-lg bg-black/20 px-2 text-sm text-white/40">
-            No devices found
+            {i18n.t("actions.noChromecastDevices")}
           </span>
         {:else}
           <div class="grid grid-cols-2 gap-2">
@@ -289,11 +290,11 @@
           onclick={pickFolder}
           class="h-8 w-full truncate rounded-lg bg-black/20 px-2 text-left text-sm text-white/70 hover:bg-black/30 hover:text-white/90"
         >
-          {(action as MoveAction).destination || "Pick a folder..."}
+          {(action as MoveAction).destination || i18n.t("actions.chooseFolder")}
         </button>
       {:else if action.type === "notify"}
         <span class="h-8 flex items-center rounded-lg bg-black/20 px-2 text-sm text-white/70">
-          System notification
+          {i18n.t("actions.systemNotification")}
         </span>
       {:else if action.type === "play"}
         {@const currentApp = (action as PlayAction).app}
@@ -321,7 +322,7 @@
             class="flex items-center gap-2 truncate rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80 bg-black/20 text-white/70"
           >
             <Ellipsis class="h-4 w-4 shrink-0" />
-            Other
+            {i18n.t("common.other")}
           </button>
         </div>
       {:else if action.type === "subtitle"}
@@ -329,7 +330,7 @@
           type="text"
           value={subtitleLangInput}
           oninput={(e) => handleSubtitleLangChange((e.target as HTMLInputElement).value)}
-          placeholder="en, es"
+          placeholder="en, es, de"
           autocorrect="off"
           autocapitalize="off"
           spellcheck={false}
@@ -342,7 +343,7 @@
             <textarea
               value={autoAction.script}
               oninput={(e) => playletsState.updateAction<AutomationAction>(playletId, action.id, { script: (e.target as HTMLTextAreaElement).value })}
-              placeholder="echo $TORRENT_NAME"
+              placeholder="echo $TORRENT_NAME downloaded"
               rows={3}
   
               autocapitalize="off"
@@ -353,7 +354,7 @@
             <textarea
               value={autoAction.script}
               oninput={(e) => playletsState.updateAction<AutomationAction>(playletId, action.id, { script: (e.target as HTMLTextAreaElement).value })}
-              placeholder='display dialog "Done downloading!"'
+              placeholder='display notification "Done" with title "$TORRENT_NAME"'
               rows={3}
 
               autocapitalize="off"
@@ -365,7 +366,7 @@
                 onclick={requestAutomationPermission}
                 class="rounded-lg bg-black/30 px-3 py-1.5 text-xs font-medium text-white/90 hover:bg-black/40"
               >
-                Grant Automation Permission
+                {i18n.t("actions.grantAutomationPermission")}
               </button>
             {/if}
           {:else}
@@ -373,7 +374,7 @@
               type="text"
               value={autoAction.shortcutName}
               oninput={(e) => playletsState.updateAction<AutomationAction>(playletId, action.id, { shortcutName: (e.target as HTMLInputElement).value })}
-              placeholder="My Shortcut Name"
+              placeholder="Organize Downloads"
   
               autocapitalize="off"
               spellcheck={false}
@@ -407,7 +408,7 @@
             type="url"
             value={webhookAction.url}
             oninput={(e) => playletsState.updateAction<WebhookAction>(playletId, action.id, { url: (e.target as HTMLInputElement).value })}
-            placeholder="https://example.com/webhook"
+            placeholder="https://hooks.slack.com/..."
 
             autocapitalize="off"
             spellcheck={false}

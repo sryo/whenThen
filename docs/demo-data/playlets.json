@@ -1,0 +1,47 @@
+{
+  "defaultsSeeded": true,
+  "playlets": [
+    {
+      "id": "demo-playlet-1",
+      "name": "Movie Night",
+      "enabled": true,
+      "trigger": { "type": "download_complete" },
+      "fileFilter": { "category": "video", "selectLargest": true },
+      "actions": [
+        { "id": "action-1a", "type": "cast", "deviceId": "" },
+        { "id": "action-1b", "type": "subtitle", "languages": ["en", "es"] }
+      ],
+      "conditionLogic": "and",
+      "conditions": [],
+      "createdAt": "2026-02-01T10:00:00.000Z"
+    },
+    {
+      "id": "demo-playlet-2",
+      "name": "Organize TV",
+      "enabled": true,
+      "trigger": { "type": "download_complete" },
+      "fileFilter": { "category": "video", "selectLargest": false },
+      "actions": [
+        { "id": "action-2a", "type": "move", "destination": "~/Movies/TV Shows" },
+        { "id": "action-2b", "type": "subtitle", "languages": ["en"] },
+        { "id": "action-2c", "type": "notify", "message": "Episode ready" }
+      ],
+      "conditionLogic": "and",
+      "conditions": [],
+      "createdAt": "2026-02-01T11:00:00.000Z"
+    },
+    {
+      "id": "demo-playlet-3",
+      "name": "Archive ISOs",
+      "enabled": true,
+      "trigger": { "type": "download_complete" },
+      "fileFilter": { "category": "all", "selectLargest": false },
+      "actions": [
+        { "id": "action-3a", "type": "move", "destination": "~/Downloads/ISOs" }
+      ],
+      "conditionLogic": "and",
+      "conditions": [],
+      "createdAt": "2026-02-01T12:00:00.000Z"
+    }
+  ]
+}

@@ -1,7 +1,10 @@
 mod commands;
 mod dock;
 mod errors;
+mod i18n;
 mod models;
+#[cfg(target_os = "macos")]
+mod move_to_applications;
 mod services;
 mod state;
 mod tray;
@@ -14,8 +17,14 @@ use state::AppState;
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 use tauri::Emitter;
 use tauri::{Manager, RunEvent, WindowEvent};
+use serde_json::Value;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
+
+#[tauri::command]
+fn get_translations(locale: Option<String>) -> Value {
+    i18n::get_translations_for_locale(locale)
+}
 
 /// Load saved config from tauri-plugin-store, falling back to defaults.
 fn load_saved_config(app: &tauri::App) -> AppConfig {
@@ -61,6 +70,13 @@ pub fn run() {
         }))
         .manage(app_state)
         .setup(|app| {
+            // On macOS, prompt to move to /Applications if running from elsewhere
+            #[cfg(target_os = "macos")]
+            if move_to_applications::check_and_prompt(app) {
+                // App was moved and relaunched from /Applications; this process will exit
+                return Ok(());
+            }
+
             let saved_config = load_saved_config(app);
             let state = app.state::<AppState>();
             {
@@ -68,6 +84,11 @@ pub fn run() {
                 tauri::async_runtime::block_on(async {
                     *config.write().await = saved_config;
                 });
+            }
+
+            // Initialize i18n
+            if let Err(e) = i18n::init(app) {
+                tracing::error!("Failed to initialize i18n: {}", e);
             }
 
             let torrent_session = state.torrent_session.clone();
@@ -90,38 +111,136 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             {
                 use tauri::menu::{Menu, MenuItem, Submenu, PredefinedMenuItem};
+                use crate::i18n::t;
 
-                let app_handle = app.handle();
-                let quit_item = MenuItem::with_id(app_handle, "quit", "Quit whenThen", true, Some("CmdOrCtrl+Q"))?;
-                let hide_item = PredefinedMenuItem::hide(app_handle, Some("Hide whenThen"))?;
-                let hide_others_item = PredefinedMenuItem::hide_others(app_handle, Some("Hide Others"))?;
-                let show_all_item = PredefinedMenuItem::show_all(app_handle, Some("Show All"))?;
-                let separator = PredefinedMenuItem::separator(app_handle)?;
+                let h = app.handle();
+
+                // App menu
+                let about_item = PredefinedMenuItem::about(h, Some(&t("menu.about")), None)?;
+                let settings_item = MenuItem::with_id(h, "settings", &t("menu.settings"), true, Some("CmdOrCtrl+,"))?;
+                let hide_item = PredefinedMenuItem::hide(h, Some(&t("menu.hide")))?;
+                let hide_others_item = PredefinedMenuItem::hide_others(h, Some(&t("menu.hideOthers")))?;
+                let show_all_item = PredefinedMenuItem::show_all(h, Some(&t("menu.showAll")))?;
+                let quit_item = MenuItem::with_id(h, "quit", &t("menu.quit"), true, Some("CmdOrCtrl+Q"))?;
 
                 let app_submenu = Submenu::with_items(
-                    app_handle,
-                    "whenThen",
+                    h,
+                    "When",
                     true,
-                    &[&hide_item, &hide_others_item, &show_all_item, &separator, &quit_item],
+                    &[
+                        &about_item,
+                        &PredefinedMenuItem::separator(h)?,
+                        &settings_item,
+                        &PredefinedMenuItem::separator(h)?,
+                        &hide_item,
+                        &hide_others_item,
+                        &show_all_item,
+                        &PredefinedMenuItem::separator(h)?,
+                        &quit_item,
+                    ],
                 )?;
 
-                // Edit menu for clipboard operations
-                let undo_item = PredefinedMenuItem::undo(app_handle, Some("Undo"))?;
-                let redo_item = PredefinedMenuItem::redo(app_handle, Some("Redo"))?;
-                let cut_item = PredefinedMenuItem::cut(app_handle, Some("Cut"))?;
-                let copy_item = PredefinedMenuItem::copy(app_handle, Some("Copy"))?;
-                let paste_item = PredefinedMenuItem::paste(app_handle, Some("Paste"))?;
-                let select_all_item = PredefinedMenuItem::select_all(app_handle, Some("Select All"))?;
-                let edit_separator = PredefinedMenuItem::separator(app_handle)?;
+                // File menu
+                let add_torrent_item = MenuItem::with_id(h, "add-torrent", &t("menu.addTorrent"), true, Some("CmdOrCtrl+O"))?;
+                let add_magnet_item = MenuItem::with_id(h, "add-magnet", &t("menu.addMagnet"), true, Some("CmdOrCtrl+U"))?;
+                let check_feeds_item = MenuItem::with_id(h, "check-feeds", &t("menu.checkFeeds"), true, Some("CmdOrCtrl+R"))?;
+
+                let file_submenu = Submenu::with_items(
+                    h,
+                    &t("menu.file"),
+                    true,
+                    &[
+                        &add_torrent_item,
+                        &add_magnet_item,
+                        &PredefinedMenuItem::separator(h)?,
+                        &check_feeds_item,
+                    ],
+                )?;
+
+                // Edit menu
+                let undo_item = PredefinedMenuItem::undo(h, Some(&t("menu.undo")))?;
+                let redo_item = PredefinedMenuItem::redo(h, Some(&t("menu.redo")))?;
+                let cut_item = PredefinedMenuItem::cut(h, Some(&t("menu.cut")))?;
+                let copy_item = PredefinedMenuItem::copy(h, Some(&t("menu.copy")))?;
+                let paste_item = PredefinedMenuItem::paste(h, Some(&t("menu.paste")))?;
+                let select_all_item = PredefinedMenuItem::select_all(h, Some(&t("menu.selectAll")))?;
 
                 let edit_submenu = Submenu::with_items(
-                    app_handle,
-                    "Edit",
+                    h,
+                    &t("menu.edit"),
                     true,
-                    &[&undo_item, &redo_item, &edit_separator, &cut_item, &copy_item, &paste_item, &select_all_item],
+                    &[
+                        &undo_item,
+                        &redo_item,
+                        &PredefinedMenuItem::separator(h)?,
+                        &cut_item,
+                        &copy_item,
+                        &paste_item,
+                        &select_all_item,
+                    ],
                 )?;
 
-                let menu = Menu::with_items(app_handle, &[&app_submenu, &edit_submenu])?;
+                // View menu
+                let view_inbox_item = MenuItem::with_id(h, "view-inbox", &t("menu.inbox"), true, Some("CmdOrCtrl+1"))?;
+                let view_playlets_item = MenuItem::with_id(h, "view-playlets", &t("menu.playlets"), true, Some("CmdOrCtrl+2"))?;
+                let view_settings_item = MenuItem::with_id(h, "view-settings", &t("nav.settings"), true, Some("CmdOrCtrl+3"))?;
+
+                let view_submenu = Submenu::with_items(
+                    h,
+                    &t("menu.view"),
+                    true,
+                    &[&view_inbox_item, &view_playlets_item, &view_settings_item],
+                )?;
+
+                // Torrents menu
+                let pause_all_item = MenuItem::with_id(h, "pause-all", &t("menu.pauseAll"), true, None::<&str>)?;
+                let resume_all_item = MenuItem::with_id(h, "resume-all", &t("menu.resumeAll"), true, None::<&str>)?;
+                let clear_completed_item = MenuItem::with_id(h, "clear-completed", &t("menu.clearCompleted"), true, None::<&str>)?;
+
+                let torrents_submenu = Submenu::with_items(
+                    h,
+                    &t("menu.torrents"),
+                    true,
+                    &[
+                        &pause_all_item,
+                        &resume_all_item,
+                        &PredefinedMenuItem::separator(h)?,
+                        &clear_completed_item,
+                    ],
+                )?;
+
+                // Window menu
+                let minimize_item = PredefinedMenuItem::minimize(h, Some(&t("menu.minimize")))?;
+
+                let window_submenu = Submenu::with_items(
+                    h,
+                    &t("menu.window"),
+                    true,
+                    &[&minimize_item],
+                )?;
+
+                // Help menu
+                let help_docs_item = MenuItem::with_id(h, "help-docs", &t("menu.helpDocs"), true, None::<&str>)?;
+
+                let help_submenu = Submenu::with_items(
+                    h,
+                    &t("menu.help"),
+                    true,
+                    &[&help_docs_item],
+                )?;
+
+                let menu = Menu::with_items(
+                    h,
+                    &[
+                        &app_submenu,
+                        &file_submenu,
+                        &edit_submenu,
+                        &view_submenu,
+                        &torrents_submenu,
+                        &window_submenu,
+                        &help_submenu,
+                    ],
+                )?;
                 app.set_menu(menu)?;
             }
 
@@ -190,10 +309,25 @@ pub fn run() {
                     }
                 }
 
-                // Load persisted RSS sources and interests
+                // Load persisted RSS sources, interests, seen items, and bad items
                 let rss_app_state = app_handle_for_rss.state::<AppState>();
                 commands::rss::load_sources(&app_handle_for_rss, &rss_app_state).await;
                 commands::rss::load_interests(&app_handle_for_rss, &rss_app_state).await;
+                commands::rss::load_seen_items(&app_handle_for_rss, &rss_app_state).await;
+                commands::rss::load_bad_items(&app_handle_for_rss, &rss_app_state).await;
+
+                // Check for demo mode (marker file in app support directory)
+                let demo_marker = app_handle_for_rss.path().app_data_dir()
+                    .map(|d| d.join("demo_mode"))
+                    .ok();
+                if let Some(marker) = demo_marker {
+                    if marker.exists() {
+                        info!("Demo mode detected, seeding demo data");
+                        if let Err(e) = commands::rss::seed_demo_pending(&rss_app_state).await {
+                            tracing::warn!("Failed to seed demo data: {}", e);
+                        }
+                    }
+                }
 
                 // Start RSS polling service
                 let rss_handle = services::rss::start_service(app_handle_for_rss, rss_state.clone());
@@ -275,18 +409,145 @@ pub fn run() {
             commands::rss::rss_fetch_metadata,
             commands::rss::rss_approve_match,
             commands::rss::rss_reject_match,
+            commands::rss::rss_check_now,
+            // RSS bad items commands
+            commands::rss::rss_mark_bad,
+            commands::rss::rss_unmark_bad,
+            commands::rss::rss_list_bad,
+            // RSS demo data
+            commands::rss::rss_seed_demo,
+            // i18n commands
+            get_translations,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building whenThen");
+        .expect("error while building When");
 
     // Register macOS menu event handler after build
     #[cfg(target_os = "macos")]
     {
+        use tauri::Emitter;
+
         app.on_menu_event(|app_handle, event| {
-            if event.id().as_ref() == "quit" {
-                let state = app_handle.state::<AppState>();
-                state.quit_requested.store(true, Ordering::SeqCst);
-                app_handle.exit(0);
+            let id = event.id().as_ref();
+            match id {
+                "quit" => {
+                    let state = app_handle.state::<AppState>();
+                    state.quit_requested.store(true, Ordering::SeqCst);
+                    app_handle.exit(0);
+                }
+                "settings" => {
+                    let _ = app_handle.emit("menu:navigate", "settings");
+                }
+                "add-torrent" => {
+                    // Open file dialog and add torrent
+                    let handle = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        use tauri_plugin_dialog::DialogExt;
+                        let file = handle.dialog()
+                            .file()
+                            .add_filter("Torrent Files", &["torrent"])
+                            .blocking_pick_file();
+                        if let Some(path) = file {
+                            let state = handle.state::<AppState>();
+                            if let Some(path_str) = path.as_path().map(|p| p.to_string_lossy().to_string()) {
+                                match services::torrent_engine::add_torrent_file(&state, &handle, path_str, None).await {
+                                    Ok(_) => info!("Added torrent from menu"),
+                                    Err(e) => {
+                                        tracing::error!("Failed to add torrent: {}", e);
+                                        let _ = handle.emit("torrent:error", e.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+                "add-magnet" => {
+                    let _ = app_handle.emit("menu:add-magnet", ());
+                }
+                "check-feeds" => {
+                    let handle = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = services::rss::check_feeds_now(&handle).await {
+                            tracing::error!("Failed to check feeds: {}", e);
+                        }
+                    });
+                }
+                "view-inbox" => {
+                    let _ = app_handle.emit("menu:navigate", "inbox");
+                }
+                "view-playlets" => {
+                    let _ = app_handle.emit("menu:navigate", "rules");
+                }
+                "view-settings" => {
+                    let _ = app_handle.emit("menu:navigate", "settings");
+                }
+                "pause-all" => {
+                    let handle = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let state = handle.state::<AppState>();
+                        let session = {
+                            let guard = state.torrent_session.read().await;
+                            match guard.as_ref() {
+                                Some(s) => s.clone(),
+                                None => return,
+                            }
+                        };
+                        let torrents: Vec<_> = session.with_torrents(|iter| {
+                            iter.map(|(id, h)| (id, h.clone())).collect()
+                        });
+                        for (_id, torrent_handle) in torrents {
+                            let _ = session.pause(&torrent_handle).await;
+                        }
+                        let _ = handle.emit("torrents:changed", ());
+                    });
+                }
+                "resume-all" => {
+                    let handle = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let state = handle.state::<AppState>();
+                        let session = {
+                            let guard = state.torrent_session.read().await;
+                            match guard.as_ref() {
+                                Some(s) => s.clone(),
+                                None => return,
+                            }
+                        };
+                        let torrents: Vec<_> = session.with_torrents(|iter| {
+                            iter.map(|(id, h)| (id, h.clone())).collect()
+                        });
+                        for (_id, torrent_handle) in torrents {
+                            let _ = session.unpause(&torrent_handle).await;
+                        }
+                        let _ = handle.emit("torrents:changed", ());
+                    });
+                }
+                "clear-completed" => {
+                    let handle = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let state = handle.state::<AppState>();
+                        let session = {
+                            let guard = state.torrent_session.read().await;
+                            match guard.as_ref() {
+                                Some(s) => s.clone(),
+                                None => return,
+                            }
+                        };
+                        let completed_ids: Vec<usize> = session.with_torrents(|iter| {
+                            iter.filter(|(_id, h)| h.stats().finished)
+                                .map(|(id, _h)| id)
+                                .collect()
+                        });
+                        for id in completed_ids {
+                            let _ = services::torrent_engine::delete_torrent(&state, id, false).await;
+                        }
+                        let _ = handle.emit("torrents:changed", ());
+                    });
+                }
+                "help-docs" => {
+                    use tauri_plugin_shell::ShellExt;
+                    let _ = app_handle.shell().open("https://whenthen.app/docs", None);
+                }
+                _ => {}
             }
         });
     }

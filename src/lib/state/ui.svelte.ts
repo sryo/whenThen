@@ -21,6 +21,7 @@ class UiState {
   flyingPip = $state<{ id: string; fromX: number; fromY: number } | null>(null);
   showSettings = $state(false);
   collapsedSections = $state<Set<string>>(new Set());
+  highlightedSection = $state<string | null>(null);
 
   async loadPersistedState() {
     try {
@@ -55,6 +56,23 @@ class UiState {
 
   setView(view: ViewName) {
     this.activeView = view;
+  }
+
+  goToSettings(sectionId?: string) {
+    this.activeView = "settings";
+    if (sectionId) {
+      this.highlightedSection = sectionId;
+      // Auto-clear highlight after animation
+      setTimeout(() => {
+        if (this.highlightedSection === sectionId) {
+          this.highlightedSection = null;
+        }
+      }, 3000);
+    }
+  }
+
+  clearHighlight() {
+    this.highlightedSection = null;
   }
 
   addToast(message: string, level: Toast["level"] = "info") {

@@ -1,6 +1,6 @@
 <!-- RSS matches awaiting approval and active downloads. -->
 <script lang="ts">
-  import { Pause, Play, X, ThumbsUp, ThumbsDown, AlertTriangle, Film, FileText, Loader2, ChevronDown, ChevronUp, RefreshCw, Trash2, Cast, Ban, Search, Workflow, FolderOpen, Check } from "lucide-svelte";
+  import { Pause, Play, X, ThumbsUp, ThumbsDown, AlertTriangle, Film, FileText, Loader2, ChevronDown, ChevronUp, RefreshCw, Trash2, Cast, Ban, Search, Workflow, FolderOpen, Check, ListPlus } from "lucide-svelte";
   import ContextMenu from "$lib/components/common/ContextMenu.svelte";
   import CastPopover from "$lib/components/common/CastPopover.svelte";
   import TaskHistoryRow from "$lib/components/common/TaskHistoryRow.svelte";
@@ -11,7 +11,10 @@
   import { playletsState } from "$lib/state/playlets.svelte";
   import { settingsState } from "$lib/state/settings.svelte";
   import { uiState } from "$lib/state/ui.svelte";
-  import { torrentPause, torrentResume, torrentDelete, torrentRecheck, runShellCommand } from "$lib/services/tauri-commands";
+  import { playbackState } from "$lib/state/playback.svelte";
+  import { queueState } from "$lib/state/queue.svelte";
+  import { devicesState } from "$lib/state/devices.svelte";
+  import { torrentPause, torrentResume, torrentDelete, torrentRecheck, torrentFiles, runShellCommand } from "$lib/services/tauri-commands";
   import { tasksState } from "$lib/state/tasks.svelte";
   import { i18n } from "$lib/i18n/state.svelte";
   import { open as openShell } from "@tauri-apps/plugin-shell";
@@ -21,9 +24,9 @@
   let loadingMetadata = $state<string | null>(null);
   let approvingId = $state<string | null>(null);
   let refreshing = $state(false);
-  let castPopover = $state<{ torrentId: number; x: number; y: number } | null>(null);
+  let castPopover = $state<{ torrentId: number; name: string; x: number; y: number } | null>(null);
   let playletPicker = $state<{ taskId: string; x: number; y: number } | null>(null);
-
+  
   const activeDownloads = $derived(torrentsState.activeTorrents);
   const completedTorrents = $derived(torrentsState.completedTorrents);
   const pendingMatches = $derived(feedsState.pendingMatches);
@@ -53,7 +56,7 @@
 
   function openPlayletPicker(e: MouseEvent, taskId: string) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    playletPicker = { taskId, x: rect.left, y: rect.bottom + 4 };
+    playletPicker = { taskId, x: rect.right, y: rect.bottom + 4 };
   }
 
   function selectPlaylet(playletId: string) {
@@ -202,6 +205,7 @@
 
   function completedTorrentContextMenuItems(id: number, infoHash: string, name: string): ContextMenuEntry[] {
     const interestLink = feedsState.getTorrentInterest(id);
+    const hasConnectedDevice = devicesState.hasConnectedDevice;
     const items: ContextMenuEntry[] = [
       {
         icon: Cast,
@@ -209,6 +213,12 @@
         action: () => {
           // TODO: open cast popover for completed torrent
         },
+      },
+      {
+        icon: ListPlus,
+        label: i18n.t("playback.addAllToQueue"),
+        action: () => addAllToQueue(id),
+        disabled: !hasConnectedDevice,
       },
       { type: "divider" },
       {
@@ -287,10 +297,10 @@
     }
   }
 
-  function openCastPopover(e: MouseEvent, torrentId: number) {
+  function openCastPopover(e: MouseEvent, torrentId: number, name: string) {
     e.stopPropagation(); // Prevent click from bubbling to window and closing popover
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    castPopover = { torrentId, x: rect.left, y: rect.bottom + 4 };
+    castPopover = { torrentId, name, x: rect.right, y: rect.bottom + 4 };
   }
 
   async function openTorrentFolderById(torrentId: number) {
@@ -318,6 +328,28 @@
       expandedMatchId = null;
     } catch (e) {
       console.error("Failed to clear pending:", e);
+    }
+  }
+
+  async function addAllToQueue(torrentId: number) {
+    try {
+      const files = await torrentFiles(torrentId);
+      const playableFiles = files.filter((f) => f.is_playable);
+
+      if (playableFiles.length === 0) {
+        return;
+      }
+
+      if (playableFiles.length === 1) {
+        queueState.addToQueue(torrentId, playableFiles[0].index, playableFiles[0].name);
+        uiState.addToast(i18n.t("playback.addedToQueue"), "success");
+      } else {
+        // Add all playable files to queue
+        queueState.addBatch(torrentId, playableFiles.map(f => ({ index: f.index, name: f.name })));
+        uiState.addToast(i18n.t("playback.addedCountToQueue", { count: playableFiles.length }), "success");
+      }
+    } catch (e) {
+      console.error("Failed to add to queue:", e);
     }
   }
 </script>
@@ -531,7 +563,7 @@
               </span>
               <div class="flex shrink-0 items-center gap-1">
                 <button
-                  onclick={(e) => openCastPopover(e, torrent.id)}
+                  onclick={(e) => openCastPopover(e, torrent.id, torrent.name)}
                   class="rounded-lg p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
                   title={i18n.t("actions.cast.label")}
                 >
@@ -612,17 +644,23 @@
         <div class="expand-content">
           <div class="space-y-2">
         {#each completedTorrents as torrent (torrent.id)}
+          {@const isNowPlaying = playbackState.activeTorrentId === torrent.id}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
-            class="flex items-center justify-between gap-3 rounded-xl bg-[var(--color-bg-secondary)] p-3"
+            class="flex items-center justify-between gap-3 rounded-xl p-3 {isNowPlaying ? 'ring-2 ring-[var(--color-primary)] bg-[var(--color-primary)]/5' : 'bg-[var(--color-bg-secondary)]'}"
             oncontextmenu={(e) => completedCtx.open(e, { id: torrent.id, infoHash: torrent.info_hash, name: torrent.name })}
           >
-            <span class="min-w-0 flex-1 truncate text-sm text-[var(--color-text)]">
-              {torrent.name}
-            </span>
+            <div class="flex min-w-0 flex-1 items-center gap-2">
+              {#if isNowPlaying}
+                <Cast class="h-4 w-4 shrink-0 text-[var(--color-primary)] animate-pulse" />
+              {/if}
+              <span class="min-w-0 flex-1 truncate text-sm text-[var(--color-text)]">
+                {torrent.name}
+              </span>
+            </div>
             <div class="flex shrink-0 items-center gap-1">
               <button
-                onclick={(e) => openCastPopover(e, torrent.id)}
+                onclick={(e) => openCastPopover(e, torrent.id, torrent.name)}
                 class="rounded-lg p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
                 title={i18n.t("actions.cast.label")}
               >
@@ -689,6 +727,7 @@
 {#if castPopover}
   <CastPopover
     torrentId={castPopover.torrentId}
+    torrentName={castPopover.name}
     x={castPopover.x}
     y={castPopover.y}
     onClose={() => castPopover = null}
@@ -704,7 +743,7 @@
   >
     <div
       class="absolute rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] py-1 shadow-lg"
-      style="left: {playletPicker.x}px; top: {playletPicker.y}px; min-width: 180px;"
+      style="left: {playletPicker.x}px; top: {playletPicker.y}px; min-width: 280px; max-width: 400px; transform: translateX(-100%);"
       onclick={(e) => e.stopPropagation()}
     >
       {#if allPlaylets.length === 0}

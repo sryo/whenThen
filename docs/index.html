@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>whenThen – Tiny automations for your torrents</title>
-  <meta name="description" content="Small when→then automations for your torrents. Like applets, but for downloads. We call them playlets." />
+  <title>When – Torrent automation with playlets</title>
+  <meta name="description" content="Torrent automation with playlets — small when→then rules for your downloads." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -120,6 +120,61 @@
       text-align: center;
       margin-bottom: 48px;
       letter-spacing: -0.02em;
+    }
+
+    /* ── Screenshots ── */
+    .screenshots {
+      margin-top: 48px;
+      text-align: center;
+    }
+    .screenshot-tabs {
+      display: inline-flex;
+      gap: 6px;
+      padding: 4px;
+      background: var(--color-bg-tertiary);
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+    .screenshot-tab {
+      padding: 8px 20px;
+      border-radius: 10px;
+      border: none;
+      background: transparent;
+      font-family: inherit;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--color-text-muted);
+      cursor: pointer;
+      transition: background 150ms, color 150ms;
+    }
+    .screenshot-tab:hover {
+      color: var(--color-text-secondary);
+    }
+    .screenshot-tab.active {
+      background: var(--color-bg);
+      color: var(--color-text);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .screenshot-frame {
+      position: relative;
+      min-height: 400px;
+    }
+    .screenshot-img {
+      max-width: 100%;
+      border-radius: 12px;
+      opacity: 0;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      transition: opacity 200ms;
+      pointer-events: none;
+    }
+    .screenshot-img.active {
+      opacity: 1;
+      position: relative;
+      left: auto;
+      transform: none;
+      pointer-events: auto;
     }
 
     /* ── Showcase ── */
@@ -467,13 +522,28 @@
 <!-- ── Hero ── -->
 <section class="hero">
   <div class="container">
-    <h1 class="hero-title">whenThen</h1>
-    <p class="hero-tagline">Tiny automations for your torrents</p>
-    <p class="hero-intro">Add RSS sources, define what you're looking for with interests, review matches in the screener. Once approved, playlets take over. Playlets are small when→then rules: when something happens, do this.</p>
+    <h1 class="hero-title">When ♒︎</h1>
+    <p class="hero-tagline">Your torrents, on autopilot</p>
+    <p class="hero-intro">You know the routine. Check the feeds. Scan for quality. Ignore the cam rips and fake uploads. Download. Wait. Move it to the right folder. Find subtitles. Cast it to the TV. Now do that again tomorrow.</p>
+    <p class="hero-intro" style="margin-top: 16px;">When does all of this for you. Point it at your feeds, tell it what you want, and describe what should happen when matches arrive. It monitors, filters, downloads, organizes, and plays. You just watch.</p>
+
+    <!-- Screenshots -->
+    <div class="screenshots">
+      <div class="screenshot-tabs">
+        <button class="screenshot-tab active" data-img="inbox">Inbox</button>
+        <button class="screenshot-tab" data-img="playlets">Playlets</button>
+        <button class="screenshot-tab" data-img="edit-playlet">Edit Playlet</button>
+      </div>
+      <div class="screenshot-frame">
+        <img src="screenshots/inbox.png" alt="Inbox view" class="screenshot-img active" data-img="inbox" />
+        <img src="screenshots/playlets.png" alt="Playlets view" class="screenshot-img" data-img="playlets" />
+        <img src="screenshots/edit-playlet.png" alt="Edit Playlet modal" class="screenshot-img" data-img="edit-playlet" />
+      </div>
+    </div>
 
     <div class="showcase" id="showcase"></div>
 
-    <a href="https://github.com/nicobailon/whenthen" class="hero-link" target="_blank" rel="noopener">Get from GitHub</a>
+    <a href="https://github.com/nicobailon/when" class="hero-link" target="_blank" rel="noopener">Get from GitHub</a>
   </div>
 </section>
 
@@ -481,7 +551,7 @@
 <section class="section">
   <div class="container">
     <p class="section-label">FAQ</p>
-    <h2 class="section-heading fade-in">Common questions</h2>
+    <h2 class="section-heading fade-in">How it works</h2>
     <div class="faq-list fade-in" id="faq-list"></div>
   </div>
 </section>
@@ -543,13 +613,11 @@
 
   // RSS interest filter types
   const interestFilterDefs = {
-    episode:    { label: "Episode (S01E01)", icon: "hash" },
-    resolution: { label: "Resolution",       icon: "monitor" },
-    source:     { label: "Source",           icon: "disc" },
-    codec:      { label: "Codec",            icon: "cpu" },
-    audio:      { label: "Audio",            icon: "volume" },
-    hdr:        { label: "HDR",              icon: "sun" },
-    size_range: { label: "Size range",       icon: "ruler" },
+    contains:     { label: "Contains",     icon: "filter" },
+    excludes:     { label: "Excludes",     icon: "x" },
+    regex:        { label: "Regex",        icon: "file-code" },
+    size_range:   { label: "Size range",   icon: "ruler" },
+    search_term:  { label: "Search term",  icon: "file-search" },
   };
 
   // ── Playlets ──
@@ -566,7 +634,7 @@
       ],
       fileFilter: { category: "video" },
       conditions: [],
-      sentence: '<span class="when">When</span> a torrent is added, <span class="action-word">cast</span> it to the living room TV.',
+      sentence: 'Download finishes. Movie starts playing on your TV. Subtitles ready. You didn\'t lift a finger.',
     },
     {
       id: "organize-media",
@@ -580,7 +648,7 @@
       ],
       fileFilter: { category: "video" },
       conditions: [],
-      sentence: '<span class="when">When</span> a torrent is added, <span class="action-word">rename</span>, <span class="action-word">move</span>, and <span class="action-word">subtitle</span> it automatically.',
+      sentence: 'New video arrives. Renamed properly. Moved to the right folder. Subtitles fetched. All automatic.',
     },
     {
       id: "seed-notify",
@@ -592,7 +660,7 @@
       ],
       fileFilter: null,
       conditions: [],
-      sentence: '<span class="when">When</span> seeding ratio hits 2.0, <span class="action-word">send</span> a notification.',
+      sentence: 'Seeding done. You get a notification. Time to move on.',
     },
   ];
 
@@ -667,9 +735,9 @@
     });
     html += '</div></div>';
 
-    // RSS Filters (Interests)
+    // Interest Filters
     html += '<div class="catalog-section">' +
-      '<div class="catalog-section-title">RSS Filters</div>' +
+      '<div class="catalog-section-title">Interest Filters</div>' +
       '<div class="catalog-grid">';
     Object.keys(interestFilterDefs).forEach(function(key) {
       var f = interestFilterDefs[key];
@@ -726,7 +794,7 @@
     // "Much more" panel
     var catalogIndex = playlets.length;
     panelsHTML += '<div class="showcase-panel" data-panel="' + catalogIndex + '">' +
-      '<div class="showcase-sentence">Triggers, RSS filters, actions. Mix and match.</div>' +
+      '<div class="showcase-sentence">Pick a trigger. Add your filters. Chain the actions. Your rules, running invisibly.</div>' +
       buildCatalog() +
       '</div>';
 
@@ -761,32 +829,44 @@
 
   var faqItems = [
     {
-      q: "What torrent client does it use?",
-      a: "whenThen has a built-in torrent engine powered by librqbit, a Rust-native BitTorrent client. No external torrent app needed."
+      q: "Do I need a separate torrent client?",
+      a: "No. When has its own torrent engine built in. One app. No external clients, no extra configuration, no juggling settings across three different programs."
+    },
+    {
+      q: "What's the Inbox?",
+      a: "Your screening room. Items from your feeds that match an Interest land here first. You see the file list, the total size, any red flags. Thumbs up to download, thumbs down to skip. Nothing starts without your say-so."
+    },
+    {
+      q: "What are Interests?",
+      a: "Your tastes, encoded as rules. \"Contains 1080p.\" \"Excludes CAM.\" \"Between 1GB and 10GB.\" Define an Interest once, and When applies it to every item in your feeds. Only the good stuff gets through."
+    },
+    {
+      q: "What are Playlets?",
+      a: "Tiny scripts you write in plain clicks. \"When a download finishes, move it to Movies and grab subtitles.\" \"When something matches '1080p', cast it to the living room.\" You describe what should happen; When makes it happen."
+    },
+    {
+      q: "Can feeds search per interest?",
+      a: "Yes. Put {search} in your feed URL. Each Interest queries with its own search term. Two interests, two separate searches. No duplicate results."
     },
     {
       q: "Can I cast to my TV?",
-      a: "Yes. whenThen discovers Chromecast devices on your local network and can cast media files directly. Add a Cast action to any playlet and pick your device."
+      a: "Your torrent lands. A second later, your movie starts playing on the TV. When discovers Chromecast devices automatically. Add a Cast action to any Playlet and pick your device."
     },
     {
-      q: "What file types does the filter support?",
-      a: "Built-in categories: video (mp4, mkv, avi, mov, webm), audio (mp3, flac, wav, aac, ogg), and subtitles (srt, sub, ass, vtt). You can also use selectLargest to grab the biggest file, minSizeMb to skip small files, or namePattern for custom matching."
+      q: "What can Playlets automate?",
+      a: "Pretty much anything you'd do manually: cast to Chromecast, move to a folder, fetch subtitles, open in VLC or IINA, run a shell script, send a notification. Chain them together. Set it once, forget it forever."
     },
     {
-      q: "Does it work on macOS, Windows, and Linux?",
-      a: "whenThen is built with Tauri 2, so it runs natively on macOS, Windows, and Linux. Some features like AppleScript automation are macOS-only."
+      q: "Does it run on my OS?",
+      a: "macOS, Windows, Linux. Built with Tauri 2, runs natively everywhere. Some features like AppleScript are macOS-only, but the core works the same."
     },
     {
-      q: "Is it free and open source?",
-      a: "Yes. The source is on GitHub under an open license. You can build it yourself or grab a release."
-    },
-    {
-      q: "Can I run shell scripts or webhooks?",
-      a: "The Automation action supports shell scripts, AppleScript (macOS), and Apple Shortcuts. There's also a dedicated Webhook action that sends HTTP POST or GET requests to any URL."
+      q: "Is it open source?",
+      a: "Yes. Fork it, audit it, run it however you want. The source is on GitHub."
     },
     {
       q: "How is this different from other torrent tools?",
-      a: "Most torrent clients just download. whenThen lets you chain actions (cast, move, rename, notify, run scripts) triggered by events, all in one app. No separate tools or manual steps."
+      a: "Most torrent tools stop at download. When keeps going: rename, move, cast, notify, run scripts. All in one app. No separate tools, no manual steps, no babysitting."
     },
   ];
 
@@ -840,9 +920,31 @@
     });
   }
 
+  // ── Screenshot tabs ──
+
+  function setupScreenshotTabs() {
+    var tabs = document.querySelectorAll(".screenshot-tab");
+    var imgs = document.querySelectorAll(".screenshot-img");
+
+    tabs.forEach(function(tab) {
+      tab.addEventListener("click", function() {
+        var target = tab.dataset.img;
+
+        tabs.forEach(function(t) {
+          t.classList.toggle("active", t.dataset.img === target);
+        });
+
+        imgs.forEach(function(img) {
+          img.classList.toggle("active", img.dataset.img === target);
+        });
+      });
+    });
+  }
+
   // ── Init ──
 
   function init() {
+    setupScreenshotTabs();
     renderShowcase();
     renderFAQ();
     setupFadeIns();

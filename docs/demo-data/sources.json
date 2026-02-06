@@ -1,0 +1,18 @@
+{
+  "sources": [
+    {
+      "check_interval_minutes": 30,
+      "enabled": true,
+      "id": "demo-source-1",
+      "name": "Linux ISOs",
+      "url": "https://distrowatch.com/rss"
+    },
+    {
+      "check_interval_minutes": 60,
+      "enabled": true,
+      "id": "demo-source-2",
+      "name": "Blender Films",
+      "url": "https://www.blender.org/rss"
+    }
+  ]
+}

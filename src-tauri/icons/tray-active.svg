@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="22" height="22" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
+  <!-- Three overlapping rounded squares, green fill for active state -->
+  <rect x="1" y="8" width="10" height="10" rx="2" fill="#22c55e" opacity="0.6"/>
+  <rect x="6" y="3" width="10" height="10" rx="2" fill="#22c55e" opacity="0.8"/>
+  <rect x="11" y="8" width="10" height="10" rx="2" fill="#22c55e"/>
+</svg>

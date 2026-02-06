@@ -22,6 +22,8 @@ export interface AppSettings {
   default_cast_device: string;
   default_media_player: string;
   default_move_destination: string;
+  rss_check_interval_minutes: number;
+  locale: string;
 }
 
 export type ThemeMode = "light" | "dark" | "system";
@@ -50,4 +52,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   default_cast_device: "",
   default_media_player: "",
   default_move_destination: "",
+  rss_check_interval_minutes: 15,
+  locale: "system",
 };

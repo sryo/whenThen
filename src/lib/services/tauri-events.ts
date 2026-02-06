@@ -2,11 +2,14 @@ import { listen } from "@tauri-apps/api/event";
 import { devicesState } from "$lib/state/devices.svelte";
 import { torrentsState } from "$lib/state/torrents.svelte";
 import { playbackState } from "$lib/state/playback.svelte";
+import { queueState } from "$lib/state/queue.svelte";
 import { uiState } from "$lib/state/ui.svelte";
 import { tasksState } from "$lib/state/tasks.svelte";
 import { tryExecuteNext } from "./execution-pipeline";
 import { assignTorrentToPlaylet, findBestMatch, shouldSkipAutoAssign } from "./playlet-assignment";
 import { initNotifications, notifyDownloadComplete, notifyRssMatch } from "./notifications";
+import { playbackCastTorrent } from "./tauri-commands";
+import { t } from "$lib/i18n";
 import type {
   DeviceFoundEvent,
   DeviceLostEvent,
@@ -198,9 +201,25 @@ export async function setupEventListeners() {
   );
 
   unlisteners.push(
-    await listen<{ device_id: string }>("playback:finished", (_event) => {
-      playbackState.clear();
-      uiState.addToast("Done playing", "info");
+    await listen<{ device_id: string }>("playback:finished", async (event) => {
+      const deviceId = event.payload.device_id;
+      const next = queueState.playNext();
+
+      if (next) {
+        // Auto-play next item from queue
+        const device = devicesState.devices.find((d) => d.id === deviceId);
+        const deviceName = device?.name ?? null;
+        try {
+          await playbackCastTorrent(deviceId, next.torrentId, next.fileIndex);
+          playbackState.setContext(next.name, deviceName, next.torrentId, next.fileIndex);
+        } catch {
+          playbackState.clear();
+          uiState.addToast(t("playback.done"), "info");
+        }
+      } else {
+        playbackState.clear();
+        uiState.addToast(t("playback.done"), "info");
+      }
     }),
   );
 

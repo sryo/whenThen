@@ -9,6 +9,8 @@ pub struct Source {
     pub name: String,
     pub url: String,
     pub enabled: bool,
+    /// Deprecated: interval is now global in settings. Kept for backwards compat.
+    #[serde(default)]
     pub check_interval_minutes: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_checked: Option<String>,
@@ -23,6 +25,9 @@ pub struct Interest {
     pub filters: Vec<FeedFilter>,
     #[serde(default)]
     pub filter_logic: FilterLogic,
+    /// Search term for {search} placeholder URLs. Defaults to interest name if not set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_term: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -31,19 +36,6 @@ pub enum FilterLogic {
     #[default]
     And,
     Or,
-}
-
-/// Legacy RssFeed for migration - remove after migration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RssFeed {
-    pub id: String,
-    pub name: String,
-    pub url: String,
-    pub enabled: bool,
-    pub check_interval_minutes: u32,
-    pub filters: Vec<FeedFilter>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_checked: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,34 +53,6 @@ pub enum FilterType {
     MustNotContain,
     Regex,
     SizeRange,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FeedItem {
-    pub id: String,
-    pub feed_id: String,
-    pub title: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub magnet_uri: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub torrent_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub size: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub published_date: Option<String>,
-    pub status: FeedItemStatus,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub matched_filter: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub torrent_id: Option<i64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum FeedItemStatus {
-    Pending,
-    Downloaded,
-    Skipped,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -142,4 +106,18 @@ pub struct TorrentFilePreview {
     pub size: u64,
     pub is_video: bool,
     pub is_suspicious: bool,
+}
+
+/// A torrent marked as bad by the user.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BadItem {
+    pub info_hash: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interest_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interest_name: Option<String>,
+    pub marked_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }

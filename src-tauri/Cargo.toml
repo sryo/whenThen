@@ -1,11 +1,11 @@
 [package]
-name = "when_then"
+name = "when"
 version = "26.2.5"
 edition = "2021"
-description = "whenThen - Stream torrents to your Chromecast"
+description = "When - Torrent automation with playlets"
 
 [lib]
-name = "when_then_lib"
+name = "when_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]
@@ -42,3 +42,4 @@ tauri-plugin-single-instance = "2"
 feed-rs = "2"
 regex = "1"
 chrono = "0.4"
+urlencoding = "2.1"

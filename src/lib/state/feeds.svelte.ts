@@ -7,7 +7,6 @@ export interface Source {
   name: string;
   url: string;
   enabled: boolean;
-  checkIntervalMinutes: number;
   lastChecked?: string;
 }
 
@@ -25,13 +24,13 @@ export interface FeedFilter {
   enabled: boolean;
 }
 
-export interface FeedTestResult {
+interface FeedTestResult {
   items: FeedTestItem[];
   totalCount: number;
   matchedCount: number;
 }
 
-export interface FeedTestItem {
+interface FeedTestItem {
   title: string;
   matches: boolean;
   matchedFilter?: string;
@@ -51,18 +50,32 @@ export interface PendingMatch {
   metadata?: TorrentMetadata;
 }
 
-export interface TorrentMetadata {
+interface TorrentMetadata {
   name: string;
   totalSize: number;
   fileCount: number;
   files: TorrentFilePreview[];
 }
 
-export interface TorrentFilePreview {
+interface TorrentFilePreview {
   name: string;
   size: number;
   isVideo: boolean;
   isSuspicious: boolean;
+}
+
+export interface BadItem {
+  infoHash: string;
+  title: string;
+  interestId?: string;
+  interestName?: string;
+  markedAt: string;
+  reason?: string;
+}
+
+interface TorrentInterestLink {
+  interestId: string;
+  interestName: string;
 }
 
 // Convert from Rust snake_case to JS camelCase
@@ -72,7 +85,6 @@ function sourceFromRust(s: any): Source {
     name: s.name,
     url: s.url,
     enabled: s.enabled,
-    checkIntervalMinutes: s.check_interval_minutes,
     lastChecked: s.last_checked,
   };
 }
@@ -83,7 +95,6 @@ function sourceToRust(s: Source): any {
     name: s.name,
     url: s.url,
     enabled: s.enabled,
-    check_interval_minutes: s.checkIntervalMinutes,
     last_checked: s.lastChecked,
   };
 }
@@ -145,44 +156,45 @@ function metadataFromRust(m: any): TorrentMetadata {
   };
 }
 
-let sources = $state<Source[]>([]);
-let interests = $state<Interest[]>([]);
-let pendingMatches = $state<PendingMatch[]>([]);
+function badItemFromRust(b: any): BadItem {
+  return {
+    infoHash: b.info_hash,
+    title: b.title,
+    interestId: b.interest_id,
+    interestName: b.interest_name,
+    markedAt: b.marked_at,
+    reason: b.reason,
+  };
+}
 
-export const feedsState = {
-  get sources() {
-    return sources;
-  },
+class FeedsState {
+  sources = $state<Source[]>([]);
+  interests = $state<Interest[]>([]);
+  pendingMatches = $state<PendingMatch[]>([]);
+  // Track which interest each torrent came from (torrentId -> interestInfo)
+  torrentInterests = $state<Map<number, TorrentInterestLink>>(new Map());
 
   get enabledSources() {
-    return sources.filter((s) => s.enabled);
-  },
-
-  get interests() {
-    return interests;
-  },
+    return this.sources.filter((s) => s.enabled);
+  }
 
   get enabledInterests() {
-    return interests.filter((i) => i.enabled);
-  },
-
-  get pendingMatches() {
-    return pendingMatches;
-  },
+    return this.interests.filter((i) => i.enabled);
+  }
 
   get pendingCount() {
-    return pendingMatches.length;
-  },
+    return this.pendingMatches.length;
+  }
 
   // Source operations
   async loadSources() {
     try {
       const result: any[] = await invoke("rss_list_sources");
-      sources = result.map(sourceFromRust);
+      this.sources = result.map(sourceFromRust);
     } catch (e) {
       console.error("Failed to load sources:", e);
     }
-  },
+  }
 
   async addSource(source: Omit<Source, "id">) {
     const newSource: Source = {
@@ -192,61 +204,61 @@ export const feedsState = {
 
     try {
       await invoke("rss_add_source", { source: sourceToRust(newSource) });
-      sources = [...sources, newSource];
+      this.sources = [...this.sources, newSource];
       return newSource;
     } catch (e) {
       console.error("Failed to add source:", e);
       throw e;
     }
-  },
+  }
 
   async updateSource(id: string, updates: Partial<Source>) {
-    const index = sources.findIndex((s) => s.id === id);
+    const index = this.sources.findIndex((s) => s.id === id);
     if (index < 0) return;
 
-    const updated = { ...sources[index], ...updates };
+    const updated = { ...this.sources[index], ...updates };
 
     try {
       await invoke("rss_update_source", { source: sourceToRust(updated) });
-      sources[index] = updated;
+      this.sources[index] = updated;
     } catch (e) {
       console.error("Failed to update source:", e);
       throw e;
     }
-  },
+  }
 
   async removeSource(id: string) {
     try {
       await invoke("rss_remove_source", { sourceId: id });
-      sources = sources.filter((s) => s.id !== id);
+      this.sources = this.sources.filter((s) => s.id !== id);
     } catch (e) {
       console.error("Failed to remove source:", e);
       throw e;
     }
-  },
+  }
 
   async toggleSource(id: string, enabled: boolean) {
-    const index = sources.findIndex((s) => s.id === id);
+    const index = this.sources.findIndex((s) => s.id === id);
     if (index < 0) return;
 
     try {
       await invoke("rss_toggle_source", { sourceId: id, enabled });
-      sources[index] = { ...sources[index], enabled };
+      this.sources[index] = { ...this.sources[index], enabled };
     } catch (e) {
       console.error("Failed to toggle source:", e);
       throw e;
     }
-  },
+  }
 
   // Interest operations
   async loadInterests() {
     try {
       const result: any[] = await invoke("rss_list_interests");
-      interests = result.map(interestFromRust);
+      this.interests = result.map(interestFromRust);
     } catch (e) {
       console.error("Failed to load interests:", e);
     }
-  },
+  }
 
   async addInterest(interest: Omit<Interest, "id" | "filterLogic"> & { filterLogic?: "and" | "or" }) {
     const newInterest: Interest = {
@@ -257,51 +269,51 @@ export const feedsState = {
 
     try {
       await invoke("rss_add_interest", { interest: interestToRust(newInterest) });
-      interests = [...interests, newInterest];
+      this.interests = [...this.interests, newInterest];
       return newInterest;
     } catch (e) {
       console.error("Failed to add interest:", e);
       throw e;
     }
-  },
+  }
 
   async updateInterest(id: string, updates: Partial<Interest>) {
-    const index = interests.findIndex((i) => i.id === id);
+    const index = this.interests.findIndex((i) => i.id === id);
     if (index < 0) return;
 
-    const updated = { ...interests[index], ...updates };
+    const updated = { ...this.interests[index], ...updates };
 
     try {
       await invoke("rss_update_interest", { interest: interestToRust(updated) });
-      interests[index] = updated;
+      this.interests[index] = updated;
     } catch (e) {
       console.error("Failed to update interest:", e);
       throw e;
     }
-  },
+  }
 
   async removeInterest(id: string) {
     try {
       await invoke("rss_remove_interest", { interestId: id });
-      interests = interests.filter((i) => i.id !== id);
+      this.interests = this.interests.filter((i) => i.id !== id);
     } catch (e) {
       console.error("Failed to remove interest:", e);
       throw e;
     }
-  },
+  }
 
   async toggleInterest(id: string, enabled: boolean) {
-    const index = interests.findIndex((i) => i.id === id);
+    const index = this.interests.findIndex((i) => i.id === id);
     if (index < 0) return;
 
     try {
       await invoke("rss_toggle_interest", { interestId: id, enabled });
-      interests[index] = { ...interests[index], enabled };
+      this.interests[index] = { ...this.interests[index], enabled };
     } catch (e) {
       console.error("Failed to toggle interest:", e);
       throw e;
     }
-  },
+  }
 
   async testInterest(url: string, filters: FeedFilter[]): Promise<FeedTestResult> {
     const result: any = await invoke("rss_test_interest", {
@@ -323,60 +335,122 @@ export const feedsState = {
       totalCount: result.total_count,
       matchedCount: result.matched_count,
     };
-  },
+  }
 
   // Pending matches operations
   async loadPending() {
     try {
       const result: any[] = await invoke("rss_list_pending");
-      pendingMatches = result.map(pendingFromRust);
+      this.pendingMatches = result.map(pendingFromRust);
     } catch (e) {
       console.error("Failed to load pending matches:", e);
     }
-  },
+  }
+
+  async checkFeedsNow(): Promise<number> {
+    const matched: number = await invoke("rss_check_now");
+    await this.loadPending();
+    return matched;
+  }
 
   async fetchMetadata(matchId: string): Promise<TorrentMetadata> {
     const result: any = await invoke("rss_fetch_metadata", { matchId });
     const metadata = metadataFromRust(result);
 
-    const index = pendingMatches.findIndex((m) => m.id === matchId);
+    const index = this.pendingMatches.findIndex((m) => m.id === matchId);
     if (index >= 0) {
-      pendingMatches[index] = { ...pendingMatches[index], metadata };
+      this.pendingMatches[index] = { ...this.pendingMatches[index], metadata };
     }
 
     return metadata;
-  },
+  }
 
   async approveMatch(matchId: string): Promise<number> {
+    const match = this.pendingMatches.find((m) => m.id === matchId);
     const torrentId: number = await invoke("rss_approve_match", { matchId });
-    pendingMatches = pendingMatches.filter((m) => m.id !== matchId);
+
+    // Track which interest this torrent came from
+    if (match) {
+      this.torrentInterests.set(torrentId, {
+        interestId: match.interestId,
+        interestName: match.interestName,
+      });
+    }
+
+    this.pendingMatches = this.pendingMatches.filter((m) => m.id !== matchId);
     return torrentId;
-  },
+  }
+
+  getTorrentInterest(torrentId: number): TorrentInterestLink | undefined {
+    return this.torrentInterests.get(torrentId);
+  }
+
+  clearTorrentInterest(torrentId: number) {
+    this.torrentInterests.delete(torrentId);
+  }
 
   async rejectMatch(matchId: string): Promise<void> {
     await invoke("rss_reject_match", { matchId });
-    pendingMatches = pendingMatches.filter((m) => m.id !== matchId);
-  },
+    this.pendingMatches = this.pendingMatches.filter((m) => m.id !== matchId);
+  }
+
+  async rejectAllMatches(): Promise<void> {
+    const ids = this.pendingMatches.map((m) => m.id);
+    for (const id of ids) {
+      await invoke("rss_reject_match", { matchId: id });
+    }
+    this.pendingMatches = [];
+  }
 
   updatePendingCount(count: number) {
-    if (count > pendingMatches.length) {
+    if (count > this.pendingMatches.length) {
       this.loadPending();
     }
-  },
+  }
 
   addPendingMatch(match: PendingMatch) {
-    if (!pendingMatches.find((m) => m.id === match.id)) {
-      pendingMatches = [...pendingMatches, match];
+    if (!this.pendingMatches.find((m) => m.id === match.id)) {
+      this.pendingMatches = [...this.pendingMatches, match];
     }
-  },
+  }
 
   // Legacy compatibility
   get feeds() {
-    return sources;
-  },
+    return this.sources;
+  }
 
   async loadFeeds() {
     await this.loadSources();
     await this.loadInterests();
-  },
-};
+  }
+
+  // Bad items operations
+  async markBad(
+    infoHash: string,
+    title: string,
+    interestId?: string,
+    interestName?: string,
+    reason?: string,
+    triggerRescan?: boolean
+  ): Promise<number> {
+    return invoke("rss_mark_bad", {
+      infoHash,
+      title,
+      interestId,
+      interestName,
+      reason,
+      triggerRescan: triggerRescan ?? false,
+    });
+  }
+
+  async unmarkBad(infoHash: string): Promise<void> {
+    await invoke("rss_unmark_bad", { infoHash });
+  }
+
+  async listBad(): Promise<BadItem[]> {
+    const result: any[] = await invoke("rss_list_bad");
+    return result.map(badItemFromRust);
+  }
+}
+
+export const feedsState = new FeedsState();

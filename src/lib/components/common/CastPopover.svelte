@@ -2,6 +2,7 @@
 <script lang="ts">
   import { Tv, Film, Loader2 } from "lucide-svelte";
   import { devicesState } from "$lib/state/devices.svelte";
+  import { playbackState } from "$lib/state/playback.svelte";
   import { torrentFiles, playbackCastTorrent, chromecastConnect } from "$lib/services/tauri-commands";
   import type { TorrentFileInfo } from "$lib/types/torrent";
   import { i18n } from "$lib/i18n/state.svelte";
@@ -9,11 +10,13 @@
 
   let {
     torrentId,
+    torrentName,
     x,
     y,
     onClose,
   }: {
     torrentId: number;
+    torrentName: string;
     x: number;
     y: number;
     onClose: () => void;
@@ -61,6 +64,14 @@
         devicesState.updateDeviceStatus(deviceId, "connected");
       }
       await playbackCastTorrent(deviceId, torrentId, selectedFileIndex);
+      // Set playback context so the PlaybackBar shows
+      const selectedFile = playableFiles.find(f => f.index === selectedFileIndex);
+      playbackState.setContext(
+        selectedFile?.name ?? torrentName,
+        device?.name ?? deviceId,
+        torrentId,
+        selectedFileIndex
+      );
       onClose();
     } catch (e) {
       console.error("Failed to cast:", e);
@@ -80,7 +91,7 @@
 
 <div
   class="cast-popover fixed z-50 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-3 shadow-lg"
-  style="left: {x}px; top: {y}px; min-width: 240px;"
+  style="left: {x}px; top: {y}px; min-width: 240px; transform: translateX(-100%);"
 >
   {#if step === "loading"}
     <div class="flex items-center justify-center gap-2 py-4">
@@ -110,20 +121,20 @@
         {i18n.t("actions.noChromecastDevices")}
       </span>
     {:else}
-      <div class="grid grid-cols-2 gap-2">
+      <div class="space-y-1">
         {#each devicesState.devices as device}
           <button
             onclick={() => castToDevice(device.id)}
             disabled={casting}
-            class="flex flex-col items-start gap-0.5 truncate rounded-lg bg-[var(--color-bg-secondary)] px-3 py-2 text-left transition-colors hover:bg-[var(--color-bg-tertiary)] disabled:opacity-50"
+            class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-[var(--color-bg-secondary)] disabled:opacity-50"
           >
-            <span class="flex items-center gap-2 text-sm font-medium text-[var(--color-text)]">
-              <Tv class="h-4 w-4 shrink-0" />
-              {device.name}
-            </span>
-            {#if device.model}
-              <span class="ml-6 text-xs text-[var(--color-text-muted)]">{device.model}</span>
-            {/if}
+            <Tv class="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
+            <div class="min-w-0 flex-1">
+              <div class="text-sm font-medium text-[var(--color-text)]">{device.name}</div>
+              {#if device.model}
+                <div class="text-xs text-[var(--color-text-muted)]">{device.model}</div>
+              {/if}
+            </div>
           </button>
         {/each}
       </div>

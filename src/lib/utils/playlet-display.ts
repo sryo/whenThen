@@ -1,7 +1,5 @@
-// Shared playlet rendering helpers used by PlayletsView and TrayPanel.
-import type { IconType } from "$lib/types/ui";
+// Shared playlet rendering helpers used by PlayletsView.
 import type { Action, Playlet, DelayUnit } from "$lib/types/playlet";
-import { Plus } from "lucide-svelte";
 import { getActionDef, getActionLabel } from "$lib/services/action-registry";
 import { devicesState } from "$lib/state/devices.svelte";
 
@@ -66,24 +64,6 @@ export function triggerDetails(playlet: Playlet): DetailPart[] {
   }
 
   return parts;
-}
-
-export interface ActionBlockData {
-  label: string;
-  color: string;
-  icon: IconType;
-}
-
-export function buildActionBlocks(playlet: Playlet): ActionBlockData[] {
-  return playlet.actions.map((action) => {
-    const def = getActionDef(action.type);
-    const configured = getActionLabel(action);
-    return {
-      label: configured ?? def?.label ?? action.type,
-      color: def?.color ?? "var(--color-text-muted)",
-      icon: def?.icon ?? Plus,
-    };
-  });
 }
 
 // Build a phrase like "Move to Downloads" or "Cast to Living Room".

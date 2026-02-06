@@ -200,6 +200,20 @@ export const tasksState = {
     persistTasks();
   },
 
+  clearTaskPlaylet(taskId: string) {
+    const tIdx = tasks.findIndex((t) => t.id === taskId);
+    if (tIdx < 0) return;
+    if (tasks[tIdx].status !== "waiting") return;
+
+    tasks[tIdx] = {
+      ...tasks[tIdx],
+      playletId: null,
+      playletName: null,
+      actionResults: [],
+    };
+    persistTasks();
+  },
+
   updateTorrentId(oldTorrentId: number, newTorrentId: number) {
     const idx = tasks.findIndex((t) => t.torrentId === oldTorrentId && (t.status === "waiting" || t.status === "executing"));
     if (idx < 0) return;

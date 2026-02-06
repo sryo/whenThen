@@ -6524,7 +6524,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "when_then"
+name = "when"
 version = "26.2.5"
 dependencies = [
  "anyhow",
@@ -6557,6 +6557,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "urlencoding",
  "uuid",
 ]
 

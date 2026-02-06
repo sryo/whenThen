@@ -4,6 +4,7 @@
   import ContextMenu from "$lib/components/common/ContextMenu.svelte";
   import { useContextMenu } from "$lib/utils";
   import type { ContextMenuEntry } from "$lib/types/ui";
+  import { i18n } from "$lib/i18n/state.svelte";
 
   let { toast }: { toast: Toast } = $props();
 
@@ -25,21 +26,21 @@
 
   const ctx = useContextMenu();
 
-  const menuItems: ContextMenuEntry[] = [
+  const menuItems = $derived<ContextMenuEntry[]>([
     {
       icon: Clipboard,
-      label: "Copy Message",
+      label: i18n.t("toast.copyMessage"),
       action: () => {
         navigator.clipboard.writeText(toast.message);
-        uiState.addToast("Copied to clipboard", "success");
+        uiState.addToast(i18n.t("common.copiedToClipboard"), "success");
       },
     },
     {
       icon: XCircle,
-      label: "Dismiss",
+      label: i18n.t("toast.dismiss"),
       action: () => uiState.removeToast(toast.id),
     },
-  ];
+  ]);
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->

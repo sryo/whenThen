@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegui/tauri-v2-schema/main/tauri.conf.json",
-  "productName": "whenThen",
+  "productName": "When",
   "version": "26.2.5",
-  "identifier": "com.whenthen.app",
+  "identifier": "app.when",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -14,44 +14,14 @@
     "windows": [
       {
         "label": "main",
-        "title": "whenThen",
+        "title": "When",
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
         "decorations": true,
         "visible": false,
-        "width": 600,
+        "width": 700,
         "height": 700,
-        "minWidth": 400,
-        "minHeight": 500,
-        "resizable": true,
-        "dragDropEnabled": false
-      },
-      {
-        "label": "tray-panel",
-        "url": "index.html?panel=tray",
-        "title": "whenThen Panel",
-        "decorations": false,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "resizable": false,
-        "transparent": true,
-        "shadow": true,
-        "visible": false,
-        "width": 320,
-        "height": 420,
-        "dragDropEnabled": false
-      },
-      {
-        "label": "editor",
-        "url": "index.html?panel=editor",
-        "title": "whenThen",
-        "titleBarStyle": "Overlay",
-        "hiddenTitle": true,
-        "decorations": true,
-        "visible": false,
-        "width": 600,
-        "height": 700,
-        "minWidth": 400,
+        "minWidth": 500,
         "minHeight": 500,
         "resizable": true,
         "dragDropEnabled": false
@@ -63,14 +33,15 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["app"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": ["resources/locales/*"]
   },
   "plugins": {
     "shell": {

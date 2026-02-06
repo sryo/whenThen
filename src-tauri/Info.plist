@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>whenThen uses AppleScript to automate actions after downloads complete.</string>
+	<string>When uses AppleScript to automate actions after downloads complete.</string>
 </dict>
 </plist>

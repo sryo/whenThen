@@ -6,7 +6,7 @@
   import { actionPhrase } from "$lib/utils/playlet-display";
   import { playletsState } from "$lib/state/playlets.svelte";
   import { uiState } from "$lib/state/ui.svelte";
-  import { checkAutomationPermission } from "$lib/services/tauri-commands";
+  import { checkAutomationPermission, openSystemSettings } from "$lib/services/tauri-commands";
   import { i18n } from "$lib/i18n/state.svelte";
 
   interface Props {
@@ -79,34 +79,40 @@
   }
 
   // Detect actionable errors/skips and return action info
-  type ActionableError = { type: "settings" | "permission"; label: string };
+  type ActionableError = { type: "settings" | "permission"; label: string; section?: string };
   function getActionableError(text: string | null): ActionableError | null {
     if (!text) return null;
     const lower = text.toLowerCase();
     // API key issues
     if (lower.includes("opensubtitles") && lower.includes("api key")) {
-      return { type: "settings", label: i18n.t("inbox.goToSettings") };
+      return { type: "settings", label: i18n.t("inbox.goToSettings"), section: "subtitles" };
     }
     // Automation/accessibility permission issues
-    if (lower.includes("automation") || lower.includes("accessibility")) {
+    if (lower.includes("automation") || lower.includes("accessibility") || lower.includes("system events") || lower.includes("applescript")) {
       return { type: "permission", label: i18n.t("inbox.requestPermission") };
     }
     // No destination folder configured
     if (lower.includes("no destination") || lower.includes("destination folder")) {
-      return { type: "settings", label: i18n.t("inbox.goToSettings") };
+      return { type: "settings", label: i18n.t("inbox.goToSettings"), section: "playback" };
     }
     // No cast device configured
     if (lower.includes("no cast") || lower.includes("no device") || lower.includes("chromecast")) {
-      return { type: "settings", label: i18n.t("inbox.goToSettings") };
+      return { type: "settings", label: i18n.t("inbox.goToSettings"), section: "network" };
     }
     return null;
   }
 
-  function handleActionableError(actionType: "settings" | "permission") {
+  async function handleActionableError(actionType: "settings" | "permission", section?: string) {
     if (actionType === "settings") {
-      uiState.setView("settings");
+      uiState.goToSettings(section);
     } else if (actionType === "permission") {
-      checkAutomationPermission();
+      // Open macOS System Settings to Privacy & Security > Automation
+      try {
+        await openSystemSettings("Privacy_Automation");
+      } catch {
+        // Fallback: just trigger permission check
+        checkAutomationPermission();
+      }
     }
   }
 </script>
@@ -209,7 +215,7 @@
                     {@const actionable = getActionableError(result.skipReason)}
                     {#if actionable}
                       <button
-                        onclick={() => handleActionableError(actionable.type)}
+                        onclick={() => handleActionableError(actionable.type, actionable.section)}
                         class="mt-1 flex items-center gap-1 rounded-md bg-[var(--color-bg-tertiary)] px-2 py-1 text-xs text-[var(--color-text)] hover:bg-[var(--color-border)]"
                       >
                         {#if actionable.type === "settings"}
@@ -228,7 +234,7 @@
                     {@const actionable = getActionableError(result.error)}
                     {#if actionable}
                       <button
-                        onclick={() => handleActionableError(actionable.type)}
+                        onclick={() => handleActionableError(actionable.type, actionable.section)}
                         class="mt-1 flex items-center gap-1 rounded-md bg-[var(--color-bg-tertiary)] px-2 py-1 text-xs text-[var(--color-text)] hover:bg-[var(--color-border)]"
                       >
                         {#if actionable.type === "settings"}

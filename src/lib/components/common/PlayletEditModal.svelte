@@ -25,6 +25,7 @@
     TriggerType,
   } from "$lib/types/playlet";
   import { getActionDef } from "$lib/services/action-registry";
+  import { i18n } from "$lib/i18n/state.svelte";
 
   const thenGridItems: { type: string; label?: string }[] = [
     { type: "cast" },
@@ -51,12 +52,12 @@
     return playlet.actions.some((a) => check.includes(a.type));
   }
 
-  const filterCategoryLabels: Record<FileFilterCategory, string> = {
-    all: "Any file",
-    video: "Video files",
-    audio: "Audio files",
-    subtitle: "Subtitles",
-    custom: "Custom",
+  const filterCategoryKeys: Record<FileFilterCategory, string> = {
+    all: "playlets.filterAll",
+    video: "playlets.filterVideo",
+    audio: "playlets.filterAudio",
+    subtitle: "playlets.filterSubtitle",
+    custom: "playlets.filterCustom",
   };
 
   const filterCategoryIcons: Record<FileFilterCategory, typeof Files> = {
@@ -67,11 +68,11 @@
     custom: FileCode,
   };
 
-  const triggerTypeLabels: Record<TriggerType, string> = {
-    torrent_added: "Torrent added",
-    download_complete: "Download complete",
-    metadata_received: "Metadata ready",
-    seeding_ratio: "Seeding ratio",
+  const triggerTypeKeys: Record<TriggerType, string> = {
+    torrent_added: "playlets.triggerTorrentAdded",
+    download_complete: "playlets.triggerDownloadComplete",
+    metadata_received: "playlets.triggerMetadataReceived",
+    seeding_ratio: "playlets.triggerSeedingRatio",
   };
 
   const triggerTypeIcons: Record<TriggerType, typeof Link> = {
@@ -280,7 +281,7 @@
 <div
   role="dialog"
   aria-modal="true"
-  aria-label="Edit playlet"
+  aria-label={i18n.t("playlets.editPlaylet")}
   tabindex="-1"
   class="fixed inset-0 z-50 flex justify-end {closing ? 'backdrop-fade-out' : 'backdrop-fade-in'}"
   onclick={handleBackdropClick}
@@ -312,26 +313,26 @@
           <!-- WHEN block (Trigger type selector) -->
           <div class="rounded-xl border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/5 p-4">
             <div class="flex items-center gap-3">
-              <h3 class="text-2xl font-black text-[var(--color-primary)]">When</h3>
+              <h3 class="text-2xl font-black text-[var(--color-primary)]">{i18n.t("playlets.when")}</h3>
               <ActiveTriggerIcon class="h-4 w-4 text-[var(--color-primary)]" />
             </div>
 
             <div class="mt-3 grid grid-cols-2 gap-2">
-              {#each Object.entries(triggerTypeLabels) as [type, label]}
+              {#each Object.entries(triggerTypeKeys) as [type, key]}
                 {@const TrigIcon = triggerTypeIcons[type as TriggerType] as unknown as Component}
                 <button
                   onclick={() => setTriggerType(type as TriggerType)}
                   class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors {activeTriggerType === type ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-primary)]/15 text-[var(--color-primary)]'} hover:opacity-80"
                 >
                   <TrigIcon class="h-4 w-4" />
-                  {label}
+                  {i18n.t(key)}
                 </button>
               {/each}
             </div>
 
             {#if activeTriggerType === "seeding_ratio"}
               <div class="mt-3 flex items-center gap-2">
-                <span class="text-sm text-[var(--color-text-secondary)]">Target ratio</span>
+                <span class="text-sm text-[var(--color-text-secondary)]">{i18n.t("playlets.targetRatio")}</span>
                 <input
                   type="number"
                   step="0.1"
@@ -347,25 +348,25 @@
 
           <!-- Connector line -->
           <div class="pointer-events-none flex justify-center">
-            <div class="h-4 w-[4px] rounded-full bg-[var(--color-border)]"></div>
+            <div class="h-4 w-[4px] bg-[var(--color-border)]"></div>
           </div>
 
           <!-- WITH block (file filter) — always visible, defaults to "any file" -->
           <div class="rounded-xl border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/5 p-4">
             <div class="flex items-center gap-3">
-              <h3 class="text-2xl font-black text-[var(--color-accent)]">With</h3>
+              <h3 class="text-2xl font-black text-[var(--color-accent)]">{i18n.t("playlets.with")}</h3>
               <FileVideo class="h-4 w-4 text-[var(--color-accent)]" />
             </div>
 
             <div class="mt-3 grid grid-cols-2 gap-2">
-              {#each Object.entries(filterCategoryLabels).filter(([cat]) => cat !== "subtitle") as [cat, label]}
+              {#each Object.entries(filterCategoryKeys).filter(([cat]) => cat !== "subtitle") as [cat, key]}
                 {@const CatIcon = filterCategoryIcons[cat as FileFilterCategory] as unknown as Component}
                 <button
                   onclick={() => setFilterCategory(cat as FileFilterCategory)}
                   class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors {activeFileCategory === cat ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-accent)]/15 text-[var(--color-accent)]'} hover:opacity-80"
                 >
                   <CatIcon class="h-4 w-4" />
-                  {label}
+                  {i18n.t(key)}
                 </button>
               {/each}
             </div>
@@ -375,7 +376,7 @@
                 type="text"
                 value={customExtInput}
                 oninput={(e) => handleCustomExtChange((e.target as HTMLInputElement).value)}
-                placeholder="mkv, mp4, avi"
+                placeholder="mkv, mp4"
                 autocorrect="off"
                 autocapitalize="off"
                 spellcheck={false}
@@ -392,25 +393,25 @@
                   onchange={toggleSelectLargest}
                   class="rounded"
                 />
-                Largest file only
+                {i18n.t("playlets.largestOnly")}
               </label>
               <div class="flex items-center gap-2">
-                <span class="text-xs text-[var(--color-text-secondary)]">Min size</span>
+                <span class="text-xs text-[var(--color-text-secondary)]">{i18n.t("playlets.atLeast")}</span>
                 <input
                   type="number"
                   value={playlet.fileFilter?.minSizeMb ?? ""}
                   oninput={(e) => setMinSizeMb((e.target as HTMLInputElement).value)}
-                  placeholder="MB"
+                  placeholder={i18n.t("playlets.mb")}
                   class="h-7 w-20 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
                 />
-                <span class="text-xs text-[var(--color-text-muted)]">MB</span>
+                <span class="text-xs text-[var(--color-text-muted)]">{i18n.t("playlets.mb")}</span>
               </div>
             </div>
           </div>
 
             <!-- Connector line -->
             <div class="pointer-events-none flex justify-center">
-              <div class="h-4 w-[4px] rounded-full bg-[var(--color-border)]"></div>
+              <div class="h-4 w-[4px] bg-[var(--color-border)]"></div>
             </div>
 
           <!-- THEN action boxes -->
@@ -429,7 +430,7 @@
                     <div class="h-[4px] w-full rounded-full bg-[var(--color-primary)]"></div>
                   </div>
                 {:else}
-                  <div class="h-4 w-[4px] rounded-full bg-[var(--color-border)]"></div>
+                  <div class="h-4 w-[4px] bg-[var(--color-border)]"></div>
                 {/if}
               </div>
 
@@ -468,7 +469,7 @@
                     <div class="h-[4px] w-full rounded-full bg-[var(--color-primary)]"></div>
                   </div>
                 {:else}
-                  <div class="h-4 w-[4px] rounded-full bg-[var(--color-border)]"></div>
+                  <div class="h-4 w-[4px] bg-[var(--color-border)]"></div>
                 {/if}
               </div>
             {/if}
@@ -476,11 +477,11 @@
 
           <!-- Connector line + empty Then box -->
           <div class="pointer-events-none flex justify-center">
-            <div class="h-4 w-[4px] rounded-full bg-[var(--color-border)]"></div>
+            <div class="h-4 w-[4px] bg-[var(--color-border)]"></div>
           </div>
 
           <div class="relative rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-4">
-            <h3 class="mb-3 text-2xl font-black text-[var(--color-text-muted)]">Then</h3>
+            <h3 class="mb-3 text-2xl font-black text-[var(--color-text-muted)]">{i18n.t("playlets.then")}</h3>
 
             <div class="grid grid-cols-2 gap-2">
               {#each thenGridItems as item}
@@ -517,7 +518,7 @@
             <span class="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform {playlet.enabled ? 'left-[1.125rem]' : 'left-0.5'}"></span>
           </span>
           <span class="{playlet.enabled ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}">
-            {playlet.enabled ? "Enabled" : "Disabled"}
+            {playlet.enabled ? i18n.t("common.enabled") : i18n.t("common.disabled")}
           </span>
         </button>
 
@@ -529,7 +530,7 @@
             class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
           >
             <Copy class="h-3.5 w-3.5" />
-            Duplicate
+            {i18n.t("common.duplicate")}
           </button>
           {#if playletsState.count > 1}
             <div class="w-px h-4 bg-[var(--color-border)]"></div>
@@ -538,7 +539,7 @@
               class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-error)]"
             >
               <Trash2 class="h-3.5 w-3.5" />
-              Delete
+              {i18n.t("common.delete")}
             </button>
           {/if}
         </div>

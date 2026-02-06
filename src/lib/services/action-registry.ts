@@ -1,6 +1,7 @@
 import type { IconType } from "$lib/types/ui";
 import type { Action } from "$lib/types/playlet";
 import { devicesState } from "$lib/state/devices.svelte";
+import { t } from "$lib/i18n";
 import {
   Cast,
   FolderOutput,
@@ -14,6 +15,16 @@ import {
 } from "lucide-svelte";
 
 export interface ActionDefinition {
+  type: string;
+  labelKey: string;
+  verbKey: string;
+  icon: IconType;
+  color: string;
+  configLabelKey: string;
+  defaultData: Record<string, unknown>;
+}
+
+export interface ResolvedActionDefinition {
   type: string;
   label: string;
   verb: string;
@@ -29,12 +40,30 @@ export function registerAction(def: ActionDefinition): void {
   registry.set(def.type, def);
 }
 
-export function getActionDef(type: string): ActionDefinition | undefined {
-  return registry.get(type);
+export function getActionDef(type: string): ResolvedActionDefinition | undefined {
+  const def = registry.get(type);
+  if (!def) return undefined;
+  return {
+    type: def.type,
+    label: t(def.labelKey),
+    verb: t(def.verbKey),
+    icon: def.icon,
+    color: def.color,
+    configLabel: t(def.configLabelKey),
+    defaultData: def.defaultData,
+  };
 }
 
-export function getAllActions(): ActionDefinition[] {
-  return Array.from(registry.values());
+export function getAllActionDefs(): ResolvedActionDefinition[] {
+  return Array.from(registry.values()).map((def) => ({
+    type: def.type,
+    label: t(def.labelKey),
+    verb: t(def.verbKey),
+    icon: def.icon,
+    color: def.color,
+    configLabel: t(def.configLabelKey),
+    defaultData: def.defaultData,
+  }));
 }
 
 /** Returns the configured value for an action, or null if unconfigured. */
@@ -51,11 +80,11 @@ export function getActionLabel(action: Action): string | null {
       return parts[parts.length - 1] || null;
     }
     case "play":
-      return action.app || "Default";
+      return action.app || t("common.default");
     case "notify":
-      return "Notify";
+      return t("actions.notify.label");
     case "subtitle":
-      return action.languages.length > 0 ? action.languages.join(", ") : "System";
+      return action.languages.length > 0 ? action.languages.join(", ") : t("common.system");
     case "automation":
       return action.method || null;
     case "delay":
@@ -63,96 +92,96 @@ export function getActionLabel(action: Action): string | null {
     case "webhook":
       return action.method || null;
     case "delete_source":
-      return action.deleteFiles ? "with files" : "torrent only";
+      return action.deleteFiles ? t("common.withFiles") : t("common.torrentOnly");
   }
 }
 
 registerAction({
   type: "cast",
-  label: "Cast",
-  verb: "cast",
+  labelKey: "actions.cast.label",
+  verbKey: "actions.cast.verb",
   icon: Cast,
   color: "var(--color-primary)",
-  configLabel: "Cast to",
+  configLabelKey: "actions.cast.config",
   defaultData: { deviceId: null },
 });
 
 registerAction({
   type: "move",
-  label: "Move",
-  verb: "move",
+  labelKey: "actions.move.label",
+  verbKey: "actions.move.verb",
   icon: FolderOutput,
   color: "var(--color-warning)",
-  configLabel: "Move to",
+  configLabelKey: "actions.move.config",
   defaultData: { destination: "" },
 });
 
 registerAction({
   type: "notify",
-  label: "Notify",
-  verb: "notify",
+  labelKey: "actions.notify.label",
+  verbKey: "actions.notify.verb",
   icon: Bell,
   color: "var(--color-success)",
-  configLabel: "Send",
+  configLabelKey: "actions.notify.config",
   defaultData: { method: "system" },
 });
 
 registerAction({
   type: "play",
-  label: "Play",
-  verb: "play",
+  labelKey: "actions.play.label",
+  verbKey: "actions.play.verb",
   icon: MonitorPlay,
   color: "var(--color-error)",
-  configLabel: "Play in",
+  configLabelKey: "actions.play.config",
   defaultData: { app: "" },
 });
 
 registerAction({
   type: "subtitle",
-  label: "Subtitles",
-  verb: "subtitle",
+  labelKey: "actions.subtitle.label",
+  verbKey: "actions.subtitle.verb",
   icon: Subtitles,
   color: "#6366f1",
-  configLabel: "Fetch in",
+  configLabelKey: "actions.subtitle.config",
   defaultData: { languages: [] },
 });
 
 registerAction({
   type: "automation",
-  label: "Automation",
-  verb: "automate",
+  labelKey: "actions.automation.label",
+  verbKey: "actions.automation.verb",
   icon: Terminal,
   color: "#8b5cf6",
-  configLabel: "Run",
+  configLabelKey: "actions.automation.config",
   defaultData: { method: "shell", script: "", shortcutName: "" },
 });
 
 registerAction({
   type: "delay",
-  label: "Delay",
-  verb: "wait",
+  labelKey: "actions.delay.label",
+  verbKey: "actions.delay.verb",
   icon: Timer,
   color: "#64748b",
-  configLabel: "Wait",
+  configLabelKey: "actions.delay.config",
   defaultData: { seconds: 5, delayUnit: "seconds" },
 });
 
 registerAction({
   type: "webhook",
-  label: "Webhook",
-  verb: "webhook",
+  labelKey: "actions.webhook.label",
+  verbKey: "actions.webhook.verb",
   icon: Globe,
   color: "#06b6d4",
-  configLabel: "Send to",
+  configLabelKey: "actions.webhook.config",
   defaultData: { url: "", method: "POST" },
 });
 
 registerAction({
   type: "delete_source",
-  label: "Delete",
-  verb: "clean up",
+  labelKey: "actions.deleteSource.label",
+  verbKey: "actions.deleteSource.verb",
   icon: Trash2,
   color: "#ef4444",
-  configLabel: "Delete",
+  configLabelKey: "actions.deleteSource.config",
   defaultData: { deleteFiles: true },
 });

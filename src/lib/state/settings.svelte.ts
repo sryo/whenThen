@@ -1,9 +1,7 @@
 import type { AppSettings } from "$lib/types/settings";
 import { DEFAULT_SETTINGS } from "$lib/types/settings";
 import { settingsUpdate } from "$lib/services/tauri-commands";
-import { applyColorScheme } from "$lib/themes/apply";
-import { getSchemeById } from "$lib/themes/schemes";
-import { buildSystemScheme } from "$lib/themes/system";
+import { applyColorScheme, buildSystemScheme } from "$lib/themes";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 let settings = $state<AppSettings>({ ...DEFAULT_SETTINGS });
@@ -34,9 +32,6 @@ export const settingsState = {
 
   async updateAndSave(partial: Partial<AppSettings>) {
     settings = { ...settings, ...partial };
-    if (partial.color_scheme !== undefined) {
-      this.applyScheme();
-    }
     try {
       await settingsUpdate(settings);
     } catch {
@@ -45,13 +40,7 @@ export const settingsState = {
   },
 
   applyScheme() {
-    const scheme =
-      settings.color_scheme === "auto"
-        ? buildSystemScheme(cachedOsIsDark)
-        : getSchemeById(settings.color_scheme);
-    if (scheme) {
-      applyColorScheme(scheme);
-    }
+    applyColorScheme(buildSystemScheme(cachedOsIsDark));
   },
 };
 
@@ -59,17 +48,13 @@ if (typeof window !== "undefined") {
   // Get the correct OS theme on startup (fixes matchMedia being wrong in WKWebView)
   getCurrentWindow().theme().then((t) => {
     cachedOsIsDark = t === "dark";
-    if (settings.color_scheme === "auto") {
-      settingsState.applyScheme();
-    }
+    settingsState.applyScheme();
   });
 
   getCurrentWindow().onThemeChanged(({ payload: theme }) => {
     cachedOsIsDark = theme === "dark";
-    if (settings.color_scheme === "auto") {
-      requestAnimationFrame(() => {
-        settingsState.applyScheme();
-      });
-    }
+    requestAnimationFrame(() => {
+      settingsState.applyScheme();
+    });
   });
 }

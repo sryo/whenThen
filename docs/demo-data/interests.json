@@ -1,0 +1,13 @@
+{
+  "interests": [
+    {
+      "enabled": true,
+      "filter_logic": "and",
+      "filters": [
+        { "enabled": true, "type": "must_contain", "value": "1080p" }
+      ],
+      "id": "demo-interest-2",
+      "name": "Open Movies"
+    }
+  ]
+}
