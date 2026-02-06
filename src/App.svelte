@@ -1,15 +1,13 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { Settings } from "lucide-svelte";
-  import PlayletsView from "$lib/components/views/PlayletsView.svelte";
-  import Toast from "$lib/components/common/Toast.svelte";
-  import TrayPanel from "$lib/components/common/TrayPanel.svelte";
-  import SettingsSidebar from "$lib/components/common/SettingsSidebar.svelte";
-  import { uiState } from "$lib/state/ui.svelte";
+  import AppShell from "$lib/components/layout/AppShell.svelte";
   import { settingsState } from "$lib/state/settings.svelte";
+  import { i18n } from "$lib/i18n/state.svelte";
   import { torrentsState } from "$lib/state/torrents.svelte";
   import { playletsState } from "$lib/state/playlets.svelte";
   import { tasksState } from "$lib/state/tasks.svelte";
+  import { feedsState } from "$lib/state/feeds.svelte";
+  import { uiState } from "$lib/state/ui.svelte";
   import {
     setupEventListeners,
     cleanupEventListeners,
@@ -25,33 +23,26 @@
     torrentSyncRestored,
   } from "$lib/services/tauri-commands";
   import { findBestMatch, assignTorrentToPlaylet } from "$lib/services/playlet-assignment";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { listen } from "@tauri-apps/api/event";
+  import type { ViewName } from "$lib/types/ui";
 
-  const panelParam = new URLSearchParams(window.location.search).get("panel");
-  const isTrayPanel = panelParam === "tray";
-  const isEditorWindow = panelParam === "editor";
-  const isPanel = isTrayPanel;
-
-  // Panel windows need transparent backgrounds for rounded corners
-  if (isPanel) {
-    document.documentElement.classList.add("panel-window");
-  }
-
-  // Panel windows handle their own lifecycle; skip main window setup
   onMount(async () => {
-    if (isTrayPanel) return; // TrayPanel runs its own init
-
     // Load state before registering event listeners so handlers see
     // the full playlet/task list (matters for cold-start via file association).
     await playletsState.loadPlaylets();
     await tasksState.loadTasks();
+    await feedsState.loadFeeds();
+    await feedsState.loadPending();
+    await uiState.loadPersistedState();
 
     try {
       const config = await settingsGet();
       settingsState.setSettings(config);
+      await i18n.setLocale(settingsState.settings.locale);
     } catch {
       // Use defaults, still apply scheme
       settingsState.applyScheme();
+      await i18n.setLocale(settingsState.settings.locale);
     }
 
     await setupEventListeners();
@@ -97,11 +88,6 @@
       }
     }
 
-    // Editor window: stay hidden until explicitly shown
-    if (isEditorWindow) {
-      return;
-    }
-
     // Main window: show only if not launched via file association
     const openedViaUrl = await checkOpenedViaUrl();
     if (!openedViaUrl) {
@@ -115,12 +101,39 @@
       } catch {}
     }
 
+    // Listen for pending count updates
+    const unlistenPending = await listen<number>("rss:pending-count", (event) => {
+      feedsState.updatePendingCount(event.payload);
+    });
+
+    // Listen for menu navigation events
+    const unlistenNavigate = await listen<string>("menu:navigate", (event) => {
+      const view = event.payload as ViewName;
+      uiState.setView(view);
+    });
+
+    // Listen for add magnet prompt from menu
+    const unlistenMagnet = await listen("menu:add-magnet", () => {
+      // Prompt for magnet link via browser prompt (simple approach)
+      const magnet = window.prompt("Enter magnet link:");
+      if (magnet && magnet.startsWith("magnet:")) {
+        import("$lib/services/tauri-commands").then(({ torrentAddMagnet }) => {
+          torrentAddMagnet(magnet).catch(console.error);
+        });
+      }
+    });
+
     // Suppress default WebView context menu
     window.addEventListener("contextmenu", suppressContextMenu);
+
+    return () => {
+      unlistenPending();
+      unlistenNavigate();
+      unlistenMagnet();
+    };
   });
 
   onDestroy(() => {
-    if (isTrayPanel) return;
     cleanupEventListeners();
     cleanupTriggerWatcher();
     window.removeEventListener("contextmenu", suppressContextMenu);
@@ -131,66 +144,4 @@
   }
 </script>
 
-{#if isTrayPanel}
-  <TrayPanel />
-{:else if isEditorWindow}
-  <!-- Editor window: subscriptions + playlets -->
-  <div class="flex h-full flex-col bg-[var(--color-bg)]">
-    <header class="flex shrink-0 items-center justify-between py-2 pl-20 pr-4" data-tauri-drag-region>
-      <h1 class="pointer-events-none text-sm font-semibold text-[var(--color-text)]">whenThen</h1>
-      <button
-        onclick={() => uiState.toggleSettings()}
-        class="rounded-lg p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
-        title="Settings"
-      >
-        <Settings class="h-4 w-4" />
-      </button>
-    </header>
-    <main class="min-h-0 flex-1 overflow-y-auto">
-      <PlayletsView />
-    </main>
-  </div>
-
-  {#if uiState.showSettings}
-    <SettingsSidebar />
-  {/if}
-
-  <!-- Toast notifications -->
-  {#if uiState.toasts.length > 0}
-    <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
-      {#each uiState.toasts as toast (toast.id)}
-        <Toast {toast} />
-      {/each}
-    </div>
-  {/if}
-{:else}
-  <!-- Main window: hidden by default, headless operation -->
-  <div class="flex h-full flex-col bg-[var(--color-bg)]">
-    <header class="flex shrink-0 items-center justify-between py-2 pl-20 pr-4" data-tauri-drag-region>
-      <h1 class="pointer-events-none text-sm font-semibold text-[var(--color-text)]">whenThen</h1>
-      <button
-        onclick={() => uiState.toggleSettings()}
-        class="rounded-lg p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
-        title="Settings"
-      >
-        <Settings class="h-4 w-4" />
-      </button>
-    </header>
-    <main class="min-h-0 flex-1 overflow-y-auto">
-      <PlayletsView />
-    </main>
-  </div>
-
-  {#if uiState.showSettings}
-    <SettingsSidebar />
-  {/if}
-
-  <!-- Toast notifications -->
-  {#if uiState.toasts.length > 0}
-    <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
-      {#each uiState.toasts as toast (toast.id)}
-        <Toast {toast} />
-      {/each}
-    </div>
-  {/if}
-{/if}
+<AppShell />
