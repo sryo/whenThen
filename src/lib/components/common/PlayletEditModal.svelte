@@ -73,6 +73,7 @@
     download_complete: "playlets.triggerDownloadComplete",
     metadata_received: "playlets.triggerMetadataReceived",
     seeding_ratio: "playlets.triggerSeedingRatio",
+    folder_watch: "playlets.triggerFolderWatch",
   };
 
   const triggerTypeIcons: Record<TriggerType, typeof Link> = {
@@ -80,6 +81,7 @@
     download_complete: CircleCheck,
     metadata_received: FileSearch,
     seeding_ratio: ArrowUpDown,
+    folder_watch: FolderSearch,
   };
 
   let {
@@ -117,7 +119,6 @@
     playletsState.updatePlaylet(playlet.id, { enabled: !playlet.enabled });
   }
 
-  // Sync custom extensions input when playlet changes
   $effect(() => {
     if (playlet?.fileFilter?.category === "custom") {
       customExtInput = playlet.fileFilter.customExtensions.join(", ");
@@ -310,7 +311,6 @@
       <!-- Scrollable content -->
       <div class="min-h-0 flex-1 overflow-y-auto">
         <div class="px-5 py-4">
-          <!-- WHEN block (Trigger type selector) -->
           <div class="rounded-xl border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/5 p-4">
             <div class="flex items-center gap-3">
               <h3 class="text-2xl font-black text-[var(--color-primary)]">{i18n.t("playlets.when")}</h3>

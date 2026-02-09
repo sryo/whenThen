@@ -19,11 +19,9 @@ pub async fn search_and_download(
         (cfg.opensubtitles_api_key.clone(), cfg.download_directory.clone())
     };
 
-    // Check if torrent was moved to a different location
     let moved_location = state.torrent_locations.read().await.get(&torrent_id).cloned();
 
 
-    // Get torrent handle and file info
     let session = {
         let guard = state.torrent_session.read().await;
         guard.as_ref().ok_or_else(|| {
@@ -35,7 +33,6 @@ pub async fn search_and_download(
         .get(librqbit::api::TorrentIdOrHash::Id(torrent_id))
         .ok_or(WhenThenError::TorrentNotFound(torrent_id))?;
 
-    // Get file info from torrent metadata
     let file_info: Vec<(String, u64)> = handle.with_metadata(|meta| {
         meta.info.iter_file_details()
             .map(|iter| {
@@ -54,7 +51,6 @@ pub async fn search_and_download(
 
     let torrent_name = handle.name().unwrap_or_else(|| "Unknown".to_string());
 
-    // Build the absolute path to the video file, checking moved location first
     let video_file_path = if let Some(ref loc) = moved_location {
         // Files were moved - check the new location
         let moved_path = PathBuf::from(loc);

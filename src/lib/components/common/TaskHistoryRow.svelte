@@ -21,7 +21,6 @@
   const playlet = $derived(task.playletId ? playletsState.getById(task.playletId) : null);
   const hasFailed = $derived(task.status === "failed" || task.actionResults.some((ar) => ar.status === "failed"));
 
-  // Force re-render when locale changes by depending on i18n.locale
   const actionSummary = $derived.by(() => {
     // Touch i18n.locale to make this reactive to locale changes
     void i18n.locale;

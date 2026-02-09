@@ -1,5 +1,4 @@
-// macOS dock integration: badge text.
-// Currently a placeholder - full dock badge requires NSApplication APIs.
+// macOS dock badge integration (placeholder).
 
 #[cfg(target_os = "macos")]
 #[allow(dead_code)]

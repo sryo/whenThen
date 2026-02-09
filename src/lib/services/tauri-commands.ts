@@ -10,7 +10,6 @@ import type { AppSettings } from "$lib/types/settings";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-/** Wrap a promise with a timeout. Rejects if not resolved within `ms`. */
 function withTimeout<T>(promise: Promise<T>, ms: number = DEFAULT_TIMEOUT_MS): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("Command timed out")), ms);
@@ -25,7 +24,6 @@ function invokeWithTimeout<T>(cmd: string, args?: Record<string, unknown>, ms?: 
   return withTimeout(invoke<T>(cmd, args), ms);
 }
 
-/** Deduplication: prevents the same command from running concurrently. */
 const inflight = new Map<string, Promise<unknown>>();
 function dedup<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const existing = inflight.get(key);
@@ -194,8 +192,6 @@ export async function runShellCommand(command: string): Promise<string> {
 }
 
 export async function openSystemSettings(panel: string): Promise<void> {
-  // Opens macOS System Settings to a specific panel
-  // panel examples: "Privacy_Automation", "Privacy_Accessibility"
   await runShellCommand(`open "x-apple.systempreferences:com.apple.preference.security?${panel}"`);
 }
 

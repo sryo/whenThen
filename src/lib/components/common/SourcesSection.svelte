@@ -28,7 +28,6 @@
     saveTimeout = setTimeout(() => { savedRecently = false; }, 1500);
   }
 
-  // Source operations
   async function addSource() {
     try {
       await feedsState.addSource({
@@ -70,7 +69,6 @@
     }
   }
 
-  // Scraper operations
   async function addScraper() {
     try {
       const scraper = await feedsState.addScraper({
@@ -223,7 +221,6 @@
     <!-- Scrapers -->
     {#each feedsState.scrapers as scraper, i (scraper.id)}
       <div class="rounded-lg bg-[var(--color-primary)]/10 {!scraper.enabled ? 'opacity-50' : ''}">
-        <!-- Main row -->
         <div class="flex items-center gap-2 p-2">
           <Globe class="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
 

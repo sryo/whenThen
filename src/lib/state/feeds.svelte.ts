@@ -120,7 +120,6 @@ interface ScrapedItem {
   size?: number;
 }
 
-// Convert from Rust snake_case to JS camelCase
 function sourceFromRust(s: any): Source {
   return {
     id: s.id,
@@ -156,7 +155,6 @@ function sourceToRust(s: Source): any {
 }
 
 function interestFromRust(i: any): Interest {
-  // Ensure filters array has at least one default filter
   const filters = (i.filters && i.filters.length > 0)
     ? i.filters.map((f: any) => ({
         type: f.type,
@@ -267,7 +265,6 @@ class FeedsState {
   interests = $state<Interest[]>([]);
   scrapers = $state<Scraper[]>([]);
   pendingMatches = $state<PendingMatch[]>([]);
-  // Track which interest each torrent came from (torrentId -> interestInfo)
   torrentInterests = $state<Map<number, TorrentInterestLink>>(new Map());
 
   get enabledSources() {

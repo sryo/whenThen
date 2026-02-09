@@ -69,8 +69,6 @@ export function triggerDetails(playlet: Playlet): DetailPart[] {
 
 type TranslateFn = (key: string, args?: Record<string, string | number>) => string;
 
-// Build a phrase like "Move to Downloads" or "Cast to Living Room".
-// Accepts an optional translate function for reactive contexts.
 export function actionPhrase(action: Action, translate?: TranslateFn): string {
   const tr = translate ?? t;
   const verb = tr(`actions.${action.type}.verb`);
@@ -140,7 +138,6 @@ export function buildActionPhrases(playlet: Playlet): ActionPhrase[] {
   });
 }
 
-// Build verb-only summary like "Cast & Move & Notify"
 export function buildActionSummary(playlet: Playlet): string {
   if (playlet.actions.length === 0) return "";
   return playlet.actions.map((a) => getActionDef(a.type)?.verb ?? a.type).join(" & ");

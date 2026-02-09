@@ -182,6 +182,7 @@
     "triggerDownloadComplete": "Finished downloading",
     "triggerMetadataReceived": "Files known",
     "triggerSeedingRatio": "Ratio reached",
+    "triggerFolderWatch": "Folder changed",
     "onAdded": "On added",
     "onComplete": "On complete",
     "onMetadata": "On metadata",

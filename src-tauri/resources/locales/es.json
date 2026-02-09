@@ -182,6 +182,7 @@
     "triggerDownloadComplete": "Descarga terminada",
     "triggerMetadataReceived": "Archivos conocidos",
     "triggerSeedingRatio": "Ratio alcanzado",
+    "triggerFolderWatch": "Carpeta modificada",
     "onAdded": "Al agregar",
     "onComplete": "Al completar",
     "onMetadata": "Con metadata",

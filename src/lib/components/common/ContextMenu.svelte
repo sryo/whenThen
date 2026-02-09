@@ -21,7 +21,6 @@
     items.filter((item) => item.type === "divider" || !item.hidden),
   );
 
-  // Only actionable (non-divider, non-disabled) indices for keyboard nav
   const actionableIndices = $derived(
     visibleItems
       .map((item, i) => ({ item, i }))
@@ -29,7 +28,6 @@
       .map((e) => e.i),
   );
 
-  // Clamp menu to viewport edges
   const clamped = $derived.by(() => {
     if (!menuEl) return { left: x, top: y };
     const rect = menuEl.getBoundingClientRect();

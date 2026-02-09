@@ -6,7 +6,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 let settings = $state<AppSettings>({ ...DEFAULT_SETTINGS });
 
-// Synchronous best-guess for first render; corrected by Tauri theme() immediately after
 let cachedOsIsDark =
   typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
 
@@ -45,7 +44,6 @@ export const settingsState = {
 };
 
 if (typeof window !== "undefined") {
-  // Get the correct OS theme on startup (fixes matchMedia being wrong in WKWebView)
   getCurrentWindow().theme().then((t) => {
     cachedOsIsDark = t === "dark";
     settingsState.applyScheme();

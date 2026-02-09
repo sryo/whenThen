@@ -108,7 +108,6 @@
       : (def?.configLabel ?? action.type)
   );
 
-  // Automation group: shell/applescript/shortcut come from automation.method, webhook is a separate type
   const autoMethodLabels = $derived([
     { key: "shell", label: i18n.t("actions.shell") },
     { key: "applescript", label: i18n.t("actions.applescript") },

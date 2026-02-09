@@ -31,8 +31,6 @@
   let unlistenMagnet: UnlistenFn | null = null;
 
   onMount(async () => {
-    // Load state before registering event listeners so handlers see
-    // the full playlet/task list (matters for cold-start via file association).
     await playletsState.loadPlaylets();
     await tasksState.loadTasks();
     await feedsState.loadFeeds();
@@ -52,7 +50,6 @@
     await setupEventListeners();
     await setupTriggerWatcher();
 
-    // Restore persisted torrents (retry until session is ready)
     const hasPendingTasks = tasksState.activeTasks.length > 0;
     for (let attempt = 0; attempt < 20; attempt++) {
       try {
@@ -61,7 +58,6 @@
           torrentsState.setTorrents(restored);
           break;
         }
-        // Session returned empty — retry if tasks expect torrents
         if (!hasPendingTasks) break;
         await new Promise((r) => setTimeout(r, 500));
       } catch {
@@ -69,11 +65,9 @@
       }
     }
 
-    // Fail any orphaned tasks whose torrents no longer exist
     const validTorrentIds = new Set(torrentsState.torrents.map((t) => t.id));
     tasksState.reconcileWithTorrents(validTorrentIds);
 
-    // Auto-assign unmatched restored torrents to best-matching playlet
     for (const torrent of torrentsState.torrents) {
       if (tasksState.getByTorrentId(torrent.id)) continue;
       const match = findBestMatch(
@@ -92,12 +86,7 @@
       }
     }
 
-    // Main window: show only if not launched via file association
-    const openedViaUrl = await checkOpenedViaUrl();
-    if (!openedViaUrl) {
-      // In headless mode, the main window stays hidden by default
-      // It's only shown when user clicks "Open whenThen" from tray
-    }
+    await checkOpenedViaUrl();
 
     if (settingsState.settings.auto_discover) {
       try {
@@ -105,18 +94,15 @@
       } catch {}
     }
 
-    // Listen for pending count updates
     unlistenPending = await listen<number>("rss:pending-count", (event) => {
       feedsState.updatePendingCount(event.payload);
     });
 
-    // Listen for menu navigation events
     unlistenNavigate = await listen<string>("menu:navigate", (event) => {
       const view = event.payload as ViewName;
       uiState.setView(view);
     });
 
-    // Listen for add magnet prompt from menu
     unlistenMagnet = await listen("menu:add-magnet", () => {
       const magnet = window.prompt("Enter magnet link:");
       if (magnet && magnet.startsWith("magnet:")) {
@@ -130,7 +116,6 @@
       }
     });
 
-    // Suppress default WebView context menu
     window.addEventListener("contextmenu", suppressContextMenu);
   });
 

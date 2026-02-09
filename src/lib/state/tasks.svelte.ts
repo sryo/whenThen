@@ -55,9 +55,7 @@ export const tasksState = {
         });
         return;
       }
-    } catch {
-      // store load failed
-    }
+    } catch {}
     tasks = [];
   },
 
