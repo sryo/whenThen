@@ -23,8 +23,12 @@
     torrentSyncRestored,
   } from "$lib/services/tauri-commands";
   import { findBestMatch, assignTorrentToPlaylet } from "$lib/services/playlet-assignment";
-  import { listen } from "@tauri-apps/api/event";
+  import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import type { ViewName } from "$lib/types/ui";
+
+  let unlistenPending: UnlistenFn | null = null;
+  let unlistenNavigate: UnlistenFn | null = null;
+  let unlistenMagnet: UnlistenFn | null = null;
 
   onMount(async () => {
     // Load state before registering event listeners so handlers see
@@ -102,40 +106,40 @@
     }
 
     // Listen for pending count updates
-    const unlistenPending = await listen<number>("rss:pending-count", (event) => {
+    unlistenPending = await listen<number>("rss:pending-count", (event) => {
       feedsState.updatePendingCount(event.payload);
     });
 
     // Listen for menu navigation events
-    const unlistenNavigate = await listen<string>("menu:navigate", (event) => {
+    unlistenNavigate = await listen<string>("menu:navigate", (event) => {
       const view = event.payload as ViewName;
       uiState.setView(view);
     });
 
     // Listen for add magnet prompt from menu
-    const unlistenMagnet = await listen("menu:add-magnet", () => {
-      // Prompt for magnet link via browser prompt (simple approach)
+    unlistenMagnet = await listen("menu:add-magnet", () => {
       const magnet = window.prompt("Enter magnet link:");
       if (magnet && magnet.startsWith("magnet:")) {
         import("$lib/services/tauri-commands").then(({ torrentAddMagnet }) => {
-          torrentAddMagnet(magnet).catch(console.error);
+          torrentAddMagnet(magnet).catch((err) => {
+            uiState.addToast(`Failed to add magnet: ${err?.message || err}`, "error");
+          });
         });
+      } else if (magnet) {
+        uiState.addToast("Invalid magnet link format", "error");
       }
     });
 
     // Suppress default WebView context menu
     window.addEventListener("contextmenu", suppressContextMenu);
-
-    return () => {
-      unlistenPending();
-      unlistenNavigate();
-      unlistenMagnet();
-    };
   });
 
   onDestroy(() => {
     cleanupEventListeners();
     cleanupTriggerWatcher();
+    unlistenPending?.();
+    unlistenNavigate?.();
+    unlistenMagnet?.();
     window.removeEventListener("contextmenu", suppressContextMenu);
   });
 

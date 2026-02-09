@@ -1,12 +1,13 @@
 <!-- Expandable task row with execution timeline. -->
 <script lang="ts">
-  import { Check, X, ChevronDown, ChevronUp, Ban, Settings, ShieldCheck } from "lucide-svelte";
+  import { Check, X, ChevronDown, ChevronUp, Ban, Settings, ShieldCheck, RotateCw } from "lucide-svelte";
   import type { Task, ActionResult } from "$lib/types/task";
   import { getActionDef } from "$lib/services/action-registry";
   import { actionPhrase, buildActionSummary } from "$lib/utils/playlet-display";
   import { playletsState } from "$lib/state/playlets.svelte";
   import { uiState } from "$lib/state/ui.svelte";
   import { checkAutomationPermission, openSystemSettings } from "$lib/services/tauri-commands";
+  import { retryTask } from "$lib/services/execution-pipeline";
   import { i18n } from "$lib/i18n/state.svelte";
 
   interface Props {
@@ -19,6 +20,14 @@
 
   const playlet = $derived(task.playletId ? playletsState.getById(task.playletId) : null);
   const hasFailed = $derived(task.status === "failed" || task.actionResults.some((ar) => ar.status === "failed"));
+
+  // Force re-render when locale changes by depending on i18n.locale
+  const actionSummary = $derived.by(() => {
+    // Touch i18n.locale to make this reactive to locale changes
+    void i18n.locale;
+    if (!playlet) return "";
+    return buildActionSummary(playlet);
+  });
 
   function getActionFromResult(result: ActionResult) {
     if (!playlet) return null;
@@ -69,13 +78,9 @@
     });
   }
 
-  function getActionSummary(): string {
-    if (!playlet) return "";
-    return buildActionSummary(playlet);
-  }
 
   // Detect actionable errors/skips and return action info
-  type ActionableError = { type: "settings" | "permission"; label: string; section?: string };
+  type ActionableError = { type: "settings" | "permission" | "retry"; label: string; section?: string };
   function getActionableError(text: string | null): ActionableError | null {
     if (!text) return null;
     const lower = text.toLowerCase();
@@ -83,9 +88,13 @@
     if (lower.includes("opensubtitles") && lower.includes("api key")) {
       return { type: "settings", label: i18n.t("inbox.goToSettings"), section: "subtitles" };
     }
-    // Automation/accessibility permission issues
-    if (lower.includes("automation") || lower.includes("accessibility") || lower.includes("system events") || lower.includes("applescript")) {
-      return { type: "permission", label: i18n.t("inbox.requestPermission") };
+    // Automation/AppleScript errors - could be permissions or script issues
+    if (lower.includes("applescript") || lower.includes("system events") || lower.includes("apple event")) {
+      return { type: "permission", label: i18n.t("inbox.checkPermissions") };
+    }
+    // Move errors - directory issues
+    if (lower.includes("directory not empty") || lower.includes("failed to move")) {
+      return { type: "settings", label: i18n.t("inbox.goToSettings"), section: "playback" };
     }
     // No destination folder configured
     if (lower.includes("no destination") || lower.includes("destination folder")) {
@@ -95,10 +104,14 @@
     if (lower.includes("no cast") || lower.includes("no device") || lower.includes("chromecast")) {
       return { type: "settings", label: i18n.t("inbox.goToSettings"), section: "network" };
     }
+    // No media player configured
+    if (lower.includes("no media player")) {
+      return { type: "settings", label: i18n.t("inbox.goToSettings"), section: "playback" };
+    }
     return null;
   }
 
-  async function handleActionableError(actionType: "settings" | "permission", section?: string) {
+  async function handleActionableError(actionType: "settings" | "permission" | "retry", section?: string) {
     if (actionType === "settings") {
       uiState.goToSettings(section);
     } else if (actionType === "permission") {
@@ -110,6 +123,10 @@
         checkAutomationPermission();
       }
     }
+  }
+
+  async function handleRetry() {
+    await retryTask(task.id);
   }
 </script>
 
@@ -131,8 +148,8 @@
         {/if}
       </div>
       <div class="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
-        {#if playlet}
-          <span>{getActionSummary()}</span>
+        {#if playlet && actionSummary}
+          <span>{actionSummary}</span>
           <span>·</span>
         {/if}
         <span>{formatRelativeTime(task.createdAt)}</span>
@@ -142,7 +159,7 @@
         <div class="mt-1.5 flex items-center">
           {#each task.actionResults as result, i}
             {@const action = getActionFromResult(result)}
-            {@const def = action ? getActionDef(action.type) : null}
+            {@const def = getActionDef(action?.type ?? result.actionType)}
             {#if i > 0}
               <div class="h-[2px] w-2 bg-[var(--color-border)]"></div>
             {/if}
@@ -178,7 +195,7 @@
           <div class="ml-4 border-l-2 border-[var(--color-border)] pl-4 space-y-2">
             {#each task.actionResults as result}
               {@const action = getActionFromResult(result)}
-              {@const def = action ? getActionDef(action.type) : null}
+              {@const def = getActionDef(action?.type ?? result.actionType)}
               {@const Icon = statusIcon(result.status)}
               <div class="flex items-start gap-2">
                 <div class="flex shrink-0 items-center gap-1">
@@ -253,6 +270,15 @@
           <div class="flex items-center gap-3 text-[var(--color-text-muted)]">
             <span class="w-16 shrink-0">{hasFailed ? i18n.t("inbox.failed") : i18n.t("inbox.finished")}</span>
             <span>{formatDateTime(task.completedAt)}</span>
+            {#if hasFailed}
+              <button
+                onclick={handleRetry}
+                class="ml-auto flex items-center gap-1 rounded-md bg-[var(--color-bg-tertiary)] px-2 py-1 text-xs text-[var(--color-text)] hover:bg-[var(--color-border)]"
+              >
+                <RotateCw class="h-3 w-3" />
+                {i18n.t("inbox.retry")}
+              </button>
+            {/if}
           </div>
         {/if}
       </div>

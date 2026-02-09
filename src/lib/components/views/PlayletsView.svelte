@@ -513,6 +513,7 @@
 
   .backdrop-fade-out {
     animation: fadeOut 200ms cubic-bezier(0.7, 0, 0.84, 0) forwards;
+    pointer-events: none;
   }
 
   .sidebar-slide-in {

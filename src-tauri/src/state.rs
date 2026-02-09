@@ -20,6 +20,8 @@ pub struct AppState {
     pub discovery_shutdown: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
     pub local_file_tokens: Arc<RwLock<HashMap<String, TokenEntry>>>,
     pub torrent_names: Arc<RwLock<HashMap<usize, String>>>,
+    /// Tracks where torrent files have been moved to (torrent_id -> folder path)
+    pub torrent_locations: Arc<RwLock<HashMap<usize, String>>>,
     pub folder_watcher: Arc<Mutex<Option<FolderWatcherHandle>>>,
     pub rss_state: Arc<RssState>,
     pub scraper_state: Arc<ScraperState>,
@@ -42,6 +44,7 @@ impl AppState {
             discovery_shutdown: Arc::new(Mutex::new(None)),
             local_file_tokens: Arc::new(RwLock::new(HashMap::new())),
             torrent_names: Arc::new(RwLock::new(HashMap::new())),
+            torrent_locations: Arc::new(RwLock::new(HashMap::new())),
             folder_watcher: Arc::new(Mutex::new(None)),
             rss_state: Arc::new(RssState::new()),
             scraper_state: Arc::new(ScraperState::new()),

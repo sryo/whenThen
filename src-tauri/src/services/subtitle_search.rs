@@ -13,11 +13,14 @@ pub async fn search_and_download(
     file_index: usize,
     languages: Vec<String>,
 ) -> Result<SubtitleDownloadResult> {
-    // Get API key from config
+    // Get API key and base directory from config
     let (api_key, download_dir) = {
         let cfg = state.config.read().await;
         (cfg.opensubtitles_api_key.clone(), cfg.download_directory.clone())
     };
+
+    // Check if torrent was moved to a different location
+    let moved_location = state.torrent_locations.read().await.get(&torrent_id).cloned();
 
 
     // Get torrent handle and file info
@@ -51,8 +54,25 @@ pub async fn search_and_download(
 
     let torrent_name = handle.name().unwrap_or_else(|| "Unknown".to_string());
 
-    // Build the absolute path to the video file
-    let video_file_path = expand_path(&download_dir).join(file_path_str);
+    // Build the absolute path to the video file, checking moved location first
+    let video_file_path = if let Some(ref loc) = moved_location {
+        // Files were moved - check the new location
+        let moved_path = PathBuf::from(loc);
+        // Try with torrent folder name (multi-file torrents)
+        let with_name = moved_path.join(&torrent_name).join(file_path_str);
+        if with_name.exists() {
+            with_name
+        } else {
+            // Try direct path (single-file or flat structure)
+            let file_name = PathBuf::from(file_path_str).file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| file_path_str.clone());
+            moved_path.join(&torrent_name).join(&file_name)
+        }
+    } else {
+        // Use default download directory
+        expand_path(&download_dir).join(file_path_str)
+    };
     let video_file_name = video_file_path
         .file_stem()
         .and_then(|s| s.to_str())

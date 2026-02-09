@@ -67,49 +67,55 @@ export function triggerDetails(playlet: Playlet): DetailPart[] {
   return parts;
 }
 
+type TranslateFn = (key: string, args?: Record<string, string | number>) => string;
+
 // Build a phrase like "Move to Downloads" or "Cast to Living Room".
-export function actionPhrase(action: Action): string {
-  const verb = t(`actions.${action.type}.verb`);
+// Accepts an optional translate function for reactive contexts.
+export function actionPhrase(action: Action, translate?: TranslateFn): string {
+  const tr = translate ?? t;
+  const verb = tr(`actions.${action.type}.verb`);
 
   switch (action.type) {
     case "move": {
       if (!action.destination) return verb;
       const parts = action.destination.replace(/\/+$/, "").split("/");
       const folder = parts[parts.length - 1];
-      return folder ? t("actions.phrases.moveTo", { target: folder }) : verb;
+      return folder ? tr("actions.phrases.moveTo", { target: folder }) : verb;
     }
     case "play": {
       const play = action as PlayAction;
-      const target = play.app || t("common.default");
+      const target = play.app || tr("common.default");
       if (play.usePlaylist) {
-        return t("actions.phrases.playPlaylistIn", { target });
+        return tr("actions.phrases.playPlaylistIn", { target });
       }
-      return t("actions.phrases.playIn", { target });
+      return tr("actions.phrases.playIn", { target });
     }
     case "cast": {
       if (!action.deviceId) return verb;
       const dev = devicesState.devices.find((d) => d.id === action.deviceId);
-      return dev?.name ? t("actions.phrases.castTo", { target: dev.name }) : verb;
+      return dev?.name ? tr("actions.phrases.castTo", { target: dev.name }) : verb;
     }
     case "subtitle":
       return action.languages.length > 0
-        ? t("actions.phrases.subtitleIn", { target: action.languages.join(", ") })
+        ? tr("actions.phrases.subtitleIn", { target: action.languages.join(", ") })
         : verb;
     case "delay": {
       const unitKey = `actions.delay${capitalize(action.delayUnit ?? "seconds")}`;
-      const unit = t(unitKey);
-      return t("actions.phrases.delayFor", { seconds: action.seconds, unit });
+      const unit = tr(unitKey);
+      return tr("actions.phrases.delayFor", { seconds: action.seconds, unit });
     }
-    case "automation":
-      return action.method ? t("actions.phrases.automationWith", { method: action.method }) : verb;
+    case "automation": {
+      const methodLabel = action.method ? tr(`actions.${action.method}`) : "";
+      return methodLabel ? tr("actions.phrases.automationWith", { method: methodLabel }) : verb;
+    }
     case "notify":
       return verb;
     case "webhook":
       return verb;
     case "delete_source":
       return action.deleteFiles
-        ? t("actions.phrases.deleteWithFiles")
-        : t("actions.phrases.deleteTorrentOnly");
+        ? tr("actions.phrases.deleteWithFiles")
+        : tr("actions.phrases.deleteTorrentOnly");
     default:
       return verb;
   }

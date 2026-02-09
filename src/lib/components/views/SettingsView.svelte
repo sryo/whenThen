@@ -1,6 +1,6 @@
 <!-- App preferences and configuration. -->
 <script lang="ts">
-  import { Folder, X, Clipboard, FolderOpen, Trash2, Cast, MonitorPlay, FolderOutput, Eye, EyeOff, Globe } from "lucide-svelte";
+  import { Folder, X, Clipboard, FolderOpen, Trash2, Cast, MonitorPlay, FolderOutput, Eye, EyeOff, Globe, Check } from "lucide-svelte";
   import { settingsState } from "$lib/state/settings.svelte";
   import { uiState } from "$lib/state/ui.svelte";
   import { i18n } from "$lib/i18n/state.svelte";
@@ -20,10 +20,20 @@
   import type { MediaPlayer } from "$lib/types/playback";
   import { onMount } from "svelte";
 
+  let savedRecently = $state(false);
+  let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  function showSaved() {
+    savedRecently = true;
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => { savedRecently = false; }, 1500);
+  }
+
   async function pickDirectory() {
     const dir = await openDialog({ directory: true, multiple: false });
     if (dir) {
       await settingsState.updateAndSave({ download_directory: dir as string });
+      showSaved();
     }
   }
 
@@ -31,20 +41,24 @@
     const dir = await openDialog({ directory: true, multiple: false });
     if (dir) {
       await settingsState.updateAndSave({ incomplete_directory: dir as string });
+      showSaved();
     }
   }
 
   function clearIncompleteDirectory() {
     settingsState.updateAndSave({ incomplete_directory: "" });
+    showSaved();
   }
 
   function handleToggle(key: "auto_discover" | "enable_upnp" | "watch_folders_enabled" | "auto_play_next" | "delete_torrent_file_on_add" | "show_tray_icon" | "skip_template_picker") {
     settingsState.updateAndSave({ [key]: !settingsState.settings[key] });
+    showSaved();
   }
 
   function handleNumber(key: "max_download_speed" | "max_upload_speed" | "media_server_port" | "listen_port" | "max_concurrent_tasks" | "picker_countdown_seconds" | "rss_check_interval_minutes" | "metadata_timeout_secs", e: Event) {
     const value = parseInt((e.target as HTMLInputElement).value) || 0;
     settingsState.updateAndSave({ [key]: value });
+    showSaved();
   }
 
   const fieldClass = "h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
@@ -55,6 +69,7 @@
     const value = (e.target as HTMLSelectElement).value;
     await settingsState.updateAndSave({ locale: value });
     await i18n.setLocale(value);
+    showSaved();
   }
 
   let subtitleLangInput = $state(settingsState.settings.subtitle_languages.join(", "));
@@ -63,6 +78,7 @@
     subtitleLangInput = value;
     const langs = value.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
     settingsState.updateAndSave({ subtitle_languages: langs });
+    showSaved();
   }
 
   async function addWatchFolder() {
@@ -72,6 +88,7 @@
       if (!folders.includes(dir as string)) {
         folders.push(dir as string);
         await settingsState.updateAndSave({ watch_folders: folders });
+        showSaved();
       }
     }
   }
@@ -79,6 +96,7 @@
   function removeWatchFolder(folder: string) {
     const folders = settingsState.settings.watch_folders.filter((f) => f !== folder);
     settingsState.updateAndSave({ watch_folders: folders });
+    showSaved();
   }
 
   let showApiKey = $state(false);
@@ -86,6 +104,7 @@
   function handleApiKeyChange(e: Event) {
     const value = (e.target as HTMLInputElement).value;
     settingsState.updateAndSave({ opensubtitles_api_key: value });
+    showSaved();
   }
 
   let associations = $state<FileAssociationStatus>({ torrent_files: false, magnet_links: false });
@@ -136,6 +155,7 @@
     const dir = await openDialog({ directory: true, multiple: false });
     if (dir) {
       await settingsState.updateAndSave({ default_move_destination: dir as string });
+      showSaved();
     }
   }
 
@@ -203,7 +223,17 @@
   <div class="flex flex-col gap-4">
     <!-- Language -->
     <div class="rounded-xl bg-[var(--color-bg-secondary)] p-4">
-      <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{i18n.t("settings.language")}</h3>
+      <div class="mb-4 flex items-center gap-2">
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{i18n.t("settings.language")}</h3>
+        {#if savedRecently}
+          {#key Date.now()}
+            <span class="flex items-center gap-1 text-xs text-[var(--color-success)] animate-fade-in-out">
+              <Check class="h-3 w-3" />
+              {i18n.t("common.saved")}
+            </span>
+          {/key}
+        {/if}
+      </div>
       <div class="space-y-4">
         <div>
           <label for="app-locale" class="mb-1 flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)]">
@@ -226,7 +256,17 @@
 
     <!-- Files -->
     <div class="rounded-xl bg-[var(--color-bg-secondary)] p-4">
-      <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{i18n.t("settings.files")}</h3>
+      <div class="mb-4 flex items-center gap-2">
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{i18n.t("settings.files")}</h3>
+        {#if savedRecently}
+          {#key Date.now()}
+            <span class="flex items-center gap-1 text-xs text-[var(--color-success)] animate-fade-in-out">
+              <Check class="h-3 w-3" />
+              {i18n.t("common.saved")}
+            </span>
+          {/key}
+        {/if}
+      </div>
       <div class="space-y-4">
         <div>
           <label for="download-dir" class="mb-1 block text-sm text-[var(--color-text-secondary)]">{i18n.t("settings.downloadFolder")}</label>
@@ -325,7 +365,17 @@
 
     <!-- Playback -->
     <div class="rounded-xl bg-[var(--color-bg-secondary)] p-4 {uiState.highlightedSection === 'playback' ? 'section-highlight' : ''}">
-      <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{i18n.t("settings.playback")}</h3>
+      <div class="mb-4 flex items-center gap-2">
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{i18n.t("settings.playback")}</h3>
+        {#if savedRecently}
+          {#key Date.now()}
+            <span class="flex items-center gap-1 text-xs text-[var(--color-success)] animate-fade-in-out">
+              <Check class="h-3 w-3" />
+              {i18n.t("common.saved")}
+            </span>
+          {/key}
+        {/if}
+      </div>
       <div class="space-y-4">
         <div>
           <label for="default-cast" class="mb-1 flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)]">
@@ -336,7 +386,7 @@
             id="default-cast"
             class={fieldClass}
             value={settingsState.settings.default_cast_device}
-            onchange={(e) => settingsState.updateAndSave({ default_cast_device: (e.target as HTMLSelectElement).value })}
+            onchange={(e) => { settingsState.updateAndSave({ default_cast_device: (e.target as HTMLSelectElement).value }); showSaved(); }}
           >
             <option value="">{i18n.t("common.none")}</option>
             {#if currentCastDevice}
@@ -362,7 +412,7 @@
             id="default-player"
             class={fieldClass}
             value={settingsState.settings.default_media_player}
-            onchange={(e) => settingsState.updateAndSave({ default_media_player: (e.target as HTMLSelectElement).value })}
+            onchange={(e) => { settingsState.updateAndSave({ default_media_player: (e.target as HTMLSelectElement).value }); showSaved(); }}
           >
             <option value="">{i18n.t("common.none")}</option>
             {#each mediaPlayers as player}
@@ -394,7 +444,7 @@
             />
             {#if settingsState.settings.default_move_destination}
               <button
-                onclick={() => settingsState.updateAndSave({ default_move_destination: "" })}
+                onclick={() => { settingsState.updateAndSave({ default_move_destination: "" }); showSaved(); }}
                 class="flex h-10 items-center gap-2 rounded-lg bg-[var(--color-bg-tertiary)] px-3 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]"
               >
                 <X class="h-4 w-4" />
@@ -413,7 +463,17 @@
 
     <!-- Subtitles -->
     <div class="rounded-xl bg-[var(--color-bg-secondary)] p-4 {uiState.highlightedSection === 'subtitles' ? 'section-highlight' : ''}">
-      <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{i18n.t("settings.subtitles")}</h3>
+      <div class="mb-4 flex items-center gap-2">
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{i18n.t("settings.subtitles")}</h3>
+        {#if savedRecently}
+          {#key Date.now()}
+            <span class="flex items-center gap-1 text-xs text-[var(--color-success)] animate-fade-in-out">
+              <Check class="h-3 w-3" />
+              {i18n.t("common.saved")}
+            </span>
+          {/key}
+        {/if}
+      </div>
       <div class="space-y-4">
         <div>
           <label for="opensub-key" class="mb-1 block text-sm text-[var(--color-text-secondary)]">{i18n.t("settings.openSubtitlesApiKey")}</label>
@@ -458,7 +518,17 @@
 
     <!-- Downloads -->
     <div class="rounded-xl bg-[var(--color-bg-secondary)] p-4">
-      <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{i18n.t("settings.downloads")}</h3>
+      <div class="mb-4 flex items-center gap-2">
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{i18n.t("settings.downloads")}</h3>
+        {#if savedRecently}
+          {#key Date.now()}
+            <span class="flex items-center gap-1 text-xs text-[var(--color-success)] animate-fade-in-out">
+              <Check class="h-3 w-3" />
+              {i18n.t("common.saved")}
+            </span>
+          {/key}
+        {/if}
+      </div>
       <div class="space-y-4">
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -538,7 +608,17 @@
 
     <!-- Network -->
     <div class="rounded-xl bg-[var(--color-bg-secondary)] p-4 {uiState.highlightedSection === 'network' ? 'section-highlight' : ''}">
-      <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{i18n.t("settings.network")}</h3>
+      <div class="mb-4 flex items-center gap-2">
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{i18n.t("settings.network")}</h3>
+        {#if savedRecently}
+          {#key Date.now()}
+            <span class="flex items-center gap-1 text-xs text-[var(--color-success)] animate-fade-in-out">
+              <Check class="h-3 w-3" />
+              {i18n.t("common.saved")}
+            </span>
+          {/key}
+        {/if}
+      </div>
       <div class="space-y-4">
         <div>
           <label for="listen-port" class="mb-1 block text-sm text-[var(--color-text-secondary)]">{i18n.t("settings.peerPort")}</label>
@@ -605,7 +685,17 @@
 
     <!-- Behavior -->
     <div class="rounded-xl bg-[var(--color-bg-secondary)] p-4">
-      <h3 class="mb-4 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{i18n.t("settings.behavior")}</h3>
+      <div class="mb-4 flex items-center gap-2">
+        <h3 class="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{i18n.t("settings.behavior")}</h3>
+        {#if savedRecently}
+          {#key Date.now()}
+            <span class="flex items-center gap-1 text-xs text-[var(--color-success)] animate-fade-in-out">
+              <Check class="h-3 w-3" />
+              {i18n.t("common.saved")}
+            </span>
+          {/key}
+        {/if}
+      </div>
       <div class="space-y-4">
         <div>
           <label for="rss-interval" class="mb-1 block text-sm text-[var(--color-text-secondary)]">{i18n.t("settings.checkFeedsEvery")}</label>

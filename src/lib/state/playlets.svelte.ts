@@ -12,6 +12,7 @@ import type {
 import type { TorrentFileInfo } from "$lib/types/torrent";
 import { getActionDef } from "$lib/services/action-registry";
 import { actionPhrase } from "$lib/utils/playlet-display";
+import { t } from "$lib/i18n";
 
 let playlets = $state<Playlet[]>([]);
 
@@ -112,13 +113,16 @@ function getSubject(filter: FileFilter | null): string {
   }
 }
 
-const triggerLabel: Record<string, string> = {
-  torrent_added: "",
-  download_complete: "on complete",
-  metadata_received: "on metadata",
-  seeding_ratio: "on ratio",
-  folder_watch: "from folder",
-};
+function triggerLabel(type: string): string {
+  switch (type) {
+    case "torrent_added": return "";
+    case "download_complete": return t("playlets.onComplete");
+    case "metadata_received": return t("playlets.onMetadata");
+    case "seeding_ratio": return t("playlets.atRatio", { ratio: "" }).replace(/\s*$/, "");
+    case "folder_watch": return t("playlets.whenFolder", { folder: "" }).replace(/\s*$/, "");
+    default: return "";
+  }
+}
 
 function operatorWord(op: ConditionOperator): string {
   switch (op) {
@@ -127,15 +131,16 @@ function operatorWord(op: ConditionOperator): string {
     case "starts_with": return "starts with";
     case "ends_with": return "ends with";
     case "equals": return "equals";
+    case "regex": return "matches";
   }
 }
 
 export function derivePlayletName(playlet: Playlet): string {
-  const phrases = playlet.actions.map(actionPhrase);
+  const phrases = playlet.actions.map((a) => actionPhrase(a));
   const actionStr = phrases.join(" & ");
   const subject = getSubject(playlet.fileFilter);
 
-  const triggerPrefix = triggerLabel[playlet.trigger?.type ?? "torrent_added"] ?? "";
+  const triggerPrefix = triggerLabel(playlet.trigger?.type ?? "torrent_added");
 
   const filled = playlet.conditions.filter((c) => {
     if (c.field === "name") return c.value.trim();

@@ -648,16 +648,34 @@ fn handle_opened_urls(app_handle: &tauri::AppHandle, urls: Vec<tauri::Url>) {
         for url in &urls {
             let result: crate::errors::Result<()> = match url.scheme() {
                 "magnet" => {
-                    let magnet_uri = url.to_string();
+                    let magnet_uri = url.as_str().to_string();
                     info!("Handling magnet link: {}", magnet_uri);
-                    services::torrent_engine::add_magnet(
-                        &state,
-                        &app_handle,
-                        magnet_uri,
-                        None,
-                    )
-                    .await
-                    .map(|_| ())
+
+                    // Timeout prevents hanging on magnets with no peers/metadata
+                    let add_result = tokio::time::timeout(
+                        std::time::Duration::from_secs(30),
+                        services::torrent_engine::add_magnet(
+                            &state,
+                            &app_handle,
+                            magnet_uri.clone(),
+                            None,
+                        )
+                    ).await;
+
+                    match add_result {
+                        Ok(Ok(_)) => {
+                            info!("Magnet added successfully");
+                            Ok(())
+                        }
+                        Ok(Err(e)) => {
+                            tracing::error!("Failed to add magnet: {:?}", e);
+                            Err(e)
+                        }
+                        Err(_) => {
+                            tracing::error!("Timeout adding magnet after 30s");
+                            Err(crate::errors::WhenThenError::Torrent("Timeout adding magnet".into()))
+                        }
+                    }
                 }
                 "file" => {
                     if let Ok(path) = url.to_file_path() {

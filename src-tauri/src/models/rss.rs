@@ -2,6 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
+fn default_true() -> bool {
+    true
+}
+
 /// A source is an RSS feed URL to poll for content.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Source {
@@ -16,7 +20,7 @@ pub struct Source {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_check_at: Option<String>,
     /// Use feed GUID instead of item ID for deduplication.
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub use_guid_dedup: bool,
     /// HTTP ETag for conditional requests.
     #[serde(skip_serializing_if = "Option::is_none")]

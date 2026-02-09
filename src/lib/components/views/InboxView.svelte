@@ -8,7 +8,7 @@
   import type { ContextMenuEntry } from "$lib/types/ui";
   import { torrentsState } from "$lib/state/torrents.svelte";
   import { feedsState, type PendingMatch } from "$lib/state/feeds.svelte";
-  import { playletsState } from "$lib/state/playlets.svelte";
+  import { playletsState, derivePlayletName } from "$lib/state/playlets.svelte";
   import { settingsState } from "$lib/state/settings.svelte";
   import { uiState } from "$lib/state/ui.svelte";
   import { playbackState } from "$lib/state/playback.svelte";
@@ -32,7 +32,9 @@
   const pendingMatches = $derived(feedsState.pendingMatches);
   const completedTasks = $derived(tasksState.completedTasks);
   const allPlaylets = $derived(playletsState.playlets);
-  const hasFeedsConfigured = $derived(feedsState.sources.length > 0 || feedsState.interests.length > 0);
+  const hasFeedsConfigured = $derived(
+    (feedsState.sources.length > 0 || feedsState.scrapers.length > 0) && feedsState.interests.length > 0
+  );
 
   function getPlayletDisplayName(playlet: typeof playletsState.playlets[0]): string {
     if (playlet.name?.trim()) return playlet.name;
@@ -71,7 +73,7 @@
       // Create new task for torrent without one
       const playlet = playletsState.playlets.find(p => p.id === playletId);
       if (playlet) {
-        const name = playlet.name || playletsState.derivePlayletName(playlet);
+        const name = playlet.name || derivePlayletName(playlet);
         tasksState.createTask(
           playletPicker.torrentId,
           playletPicker.torrentName,
@@ -341,19 +343,30 @@
   async function openTorrentFolderById(torrentId: number) {
     const torrent = torrentsState.torrents.find(t => t.id === torrentId);
     const dir = settingsState.downloadDirectory;
-    if (!dir) return;
+
+    if (!dir) {
+      uiState.addToast(i18n.t("settings.notSet"), "warning");
+      return;
+    }
 
     if (torrent?.name) {
-      // Reveal the specific torrent folder/file in Finder
       const path = `${dir}/${torrent.name}`;
       try {
         await runShellCommand(`open -R "${path}"`);
       } catch {
-        // Fallback to opening the download directory
-        openShell(dir);
+        // File might be moved/deleted, try opening directory
+        try {
+          await openShell(dir);
+        } catch {
+          uiState.addToast(i18n.t("toast.somethingWentWrong", { error: "Could not open folder" }), "error");
+        }
       }
     } else {
-      openShell(dir);
+      try {
+        await openShell(dir);
+      } catch {
+        uiState.addToast(i18n.t("toast.somethingWentWrong", { error: "Could not open folder" }), "error");
+      }
     }
   }
 

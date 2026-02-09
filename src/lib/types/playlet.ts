@@ -1,5 +1,5 @@
 // Trigger types
-export type TriggerType = "torrent_added" | "download_complete" | "metadata_received" | "seeding_ratio";
+export type TriggerType = "torrent_added" | "download_complete" | "metadata_received" | "seeding_ratio" | "folder_watch";
 
 export interface TriggerConfig {
   type: TriggerType;

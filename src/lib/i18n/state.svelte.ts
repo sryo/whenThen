@@ -5,6 +5,8 @@ let version = $state(0);
 
 export const i18n = {
   get locale(): string {
+    // Reference version to establish reactivity dependency
+    void version;
     return getLocale();
   },
 

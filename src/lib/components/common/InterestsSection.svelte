@@ -1,9 +1,8 @@
 <!-- What section: patterns to watch for. -->
 <script lang="ts">
-  import { Plus, X, ToggleLeft, ToggleRight, Search, HelpCircle, Check, Folder, Film } from "lucide-svelte";
+  import { Plus, X, Trash2, ToggleLeft, ToggleRight, Search, HelpCircle, Check } from "lucide-svelte";
   import { feedsState, type Interest, type FeedFilter } from "$lib/state/feeds.svelte";
   import { i18n } from "$lib/i18n/state.svelte";
-  import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
   const placeholders: Record<FeedFilter["type"], string> = {
     must_contain: "linux, 1080p, S01",
@@ -12,17 +11,6 @@
     size_range: "100-5000",
     wildcard: "*1080p*HEVC*",
   };
-
-  async function pickDownloadPath(interest: Interest) {
-    const dir = await openDialog({ directory: true, multiple: false });
-    if (dir) {
-      updateInterest(interest.id, { downloadPath: dir as string });
-    }
-  }
-
-  function clearDownloadPath(interest: Interest) {
-    updateInterest(interest.id, { downloadPath: undefined });
-  }
 
   let savedRecently = $state(false);
   let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -117,18 +105,53 @@
 
   <div class="mt-3 space-y-3">
     {#each feedsState.interests as interest (interest.id)}
+      {@const firstFilter = interest.filters[0]}
       <!-- Card container for each interest -->
-      <div class="rounded-lg bg-[var(--color-warning)]/10 p-3 {!interest.enabled ? 'opacity-50' : ''}">
-        <!-- Header row: name + toggle + remove -->
+      <div class="rounded-lg bg-[var(--color-warning)]/10 p-3 space-y-2 {!interest.enabled ? 'opacity-50' : ''}">
+        <!-- Main row: name + first filter + toggle + remove -->
         <div class="flex items-center gap-2">
           <input
             type="text"
             value={interest.name}
             oninput={(e) => updateInterest(interest.id, { name: (e.target as HTMLInputElement).value })}
             placeholder={i18n.t("interests.interestPlaceholder")}
-            class="h-7 flex-1 max-w-[240px] rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-warning)]"
+            class="h-7 w-20 shrink-0 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-warning)]"
           />
-          <div class="flex-1"></div>
+
+          {#if firstFilter}
+            <select
+              value={firstFilter.type}
+              onchange={(e) => updateFilter(interest, 0, { type: (e.target as HTMLSelectElement).value as FeedFilter["type"] })}
+              class="h-7 shrink-0 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-warning)]"
+            >
+              <option value="must_contain">{i18n.t("interests.contains")}</option>
+              <option value="must_not_contain">{i18n.t("interests.excludes")}</option>
+              <option value="regex">{i18n.t("interests.matches")}</option>
+              <option value="wildcard">{i18n.t("interests.wildcard")}</option>
+              <option value="size_range">{i18n.t("interests.sizeMb")}</option>
+            </select>
+
+            <input
+              type="text"
+              value={firstFilter.value}
+              oninput={(e) => updateFilter(interest, 0, { value: (e.target as HTMLInputElement).value })}
+              placeholder={placeholders[firstFilter.type]}
+              autocapitalize="off"
+              spellcheck={false}
+              class="h-7 w-32 min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-warning)]"
+            />
+
+            {#if interest.filters.length > 1}
+              <button
+                onclick={() => removeFilter(interest, 0)}
+                class="shrink-0 rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-error)]"
+                title={i18n.t("interests.removeRule")}
+              >
+                <X class="h-3.5 w-3.5" />
+              </button>
+            {/if}
+          {/if}
+
           <button
             onclick={(e) => toggleInterest(e, interest)}
             class="shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
@@ -140,21 +163,21 @@
               <ToggleLeft class="h-5 w-5" />
             {/if}
           </button>
+
           <button
             onclick={() => removeInterest(interest.id)}
             class="shrink-0 rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-error)]"
             title={i18n.t("interests.removeInterest")}
           >
-            <X class="h-3.5 w-3.5" />
+            <Trash2 class="h-4 w-4" />
           </button>
         </div>
 
-        <!-- Filters section: indented with left border -->
-        <div class="mt-2 pl-4 border-l-2 border-[var(--color-warning)]/30 space-y-2">
-          {#each interest.filters as filter, i}
-            <div class="flex items-center gap-2">
-              {#if i > 0}
-                <!-- Logic dropdown for subsequent filters -->
+        <!-- Additional filters (indented) -->
+        {#if interest.filters.length > 1}
+          <div class="pl-[88px] space-y-2">
+            {#each interest.filters.slice(1) as filter, i}
+              <div class="flex items-center gap-2">
                 <select
                   value={interest.filterLogic}
                   onchange={(e) => updateInterest(interest.id, { filterLogic: (e.target as HTMLSelectElement).value as "and" | "or" })}
@@ -163,91 +186,60 @@
                   <option value="and">{i18n.t("common.and")}</option>
                   <option value="or">{i18n.t("common.or")}</option>
                 </select>
-              {/if}
 
-              <select
-                value={filter.type}
-                onchange={(e) => updateFilter(interest, i, { type: (e.target as HTMLSelectElement).value as FeedFilter["type"] })}
-                class="h-7 shrink-0 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-warning)]"
-              >
-                <option value="must_contain">{i18n.t("interests.contains")}</option>
-                <option value="must_not_contain">{i18n.t("interests.excludes")}</option>
-                <option value="regex">{i18n.t("interests.matches")}</option>
-                <option value="wildcard">{i18n.t("interests.wildcard")}</option>
-                <option value="size_range">{i18n.t("interests.sizeMb")}</option>
-              </select>
-
-              <input
-                type="text"
-                value={filter.value}
-                oninput={(e) => updateFilter(interest, i, { value: (e.target as HTMLInputElement).value })}
-                placeholder={placeholders[filter.type]}
-                autocapitalize="off"
-                spellcheck={false}
-                class="h-7 min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-warning)]"
-              />
-
-              <button
-                onclick={() => removeFilter(interest, i)}
-                class="shrink-0 rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-error)]"
-                title={i18n.t("interests.removeRule")}
-              >
-                <X class="h-3.5 w-3.5" />
-              </button>
-            </div>
-          {/each}
-
-          <!-- Add rule button -->
-          <button
-            onclick={() => addFilter(interest)}
-            class="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
-          >
-            <Plus class="h-3.5 w-3.5" />
-            {i18n.t("interests.addRule")}
-          </button>
-
-          <!-- Options: download path and smart episode filter -->
-          <div class="mt-2 pt-2 border-t border-[var(--color-warning)]/20 space-y-2">
-            <!-- Download path -->
-            <div class="flex items-center gap-2">
-              <Folder class="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
-              <span class="text-xs text-[var(--color-text-muted)] shrink-0">{i18n.t("interests.downloadPath")}</span>
-              {#if interest.downloadPath}
-                <span class="min-w-0 flex-1 truncate text-xs text-[var(--color-text-secondary)]">{interest.downloadPath}</span>
-                <button
-                  onclick={() => clearDownloadPath(interest)}
-                  class="shrink-0 rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-error)]"
+                <select
+                  value={filter.type}
+                  onchange={(e) => updateFilter(interest, i + 1, { type: (e.target as HTMLSelectElement).value as FeedFilter["type"] })}
+                  class="h-7 shrink-0 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1.5 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-warning)]"
                 >
-                  <X class="h-3 w-3" />
-                </button>
-              {:else}
-                <span class="text-xs text-[var(--color-text-muted)] italic">{i18n.t("interests.useDefault")}</span>
-              {/if}
-              <button
-                onclick={() => pickDownloadPath(interest)}
-                class="shrink-0 rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
-              >
-                <Folder class="h-3 w-3" />
-              </button>
-            </div>
+                  <option value="must_contain">{i18n.t("interests.contains")}</option>
+                  <option value="must_not_contain">{i18n.t("interests.excludes")}</option>
+                  <option value="regex">{i18n.t("interests.matches")}</option>
+                  <option value="wildcard">{i18n.t("interests.wildcard")}</option>
+                  <option value="size_range">{i18n.t("interests.sizeMb")}</option>
+                </select>
 
-            <!-- Smart episode filter -->
-            <div class="flex items-center gap-2">
-              <Film class="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
-              <span class="text-xs text-[var(--color-text-muted)] flex-1">{i18n.t("interests.smartEpisodeFilter")}</span>
-              <button
-                onclick={() => updateInterest(interest.id, { smartEpisodeFilter: !interest.smartEpisodeFilter })}
-                class="shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-              >
-                {#if interest.smartEpisodeFilter}
-                  <ToggleRight class="h-4 w-4 text-[var(--color-success)]" />
-                {:else}
-                  <ToggleLeft class="h-4 w-4" />
-                {/if}
-              </button>
-            </div>
+                <input
+                  type="text"
+                  value={filter.value}
+                  oninput={(e) => updateFilter(interest, i + 1, { value: (e.target as HTMLInputElement).value })}
+                  placeholder={placeholders[filter.type]}
+                  autocapitalize="off"
+                  spellcheck={false}
+                  class="h-7 min-w-0 flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-warning)]"
+                />
+
+                <button
+                  onclick={() => removeFilter(interest, i + 1)}
+                  class="shrink-0 rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-error)]"
+                  title={i18n.t("interests.removeRule")}
+                >
+                  <X class="h-3.5 w-3.5" />
+                </button>
+              </div>
+            {/each}
           </div>
-        </div>
+        {/if}
+
+        <!-- Add rule button (indented) -->
+        <button
+          onclick={() => addFilter(interest)}
+          class="ml-[88px] flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
+        >
+          <Plus class="h-3.5 w-3.5" />
+          {i18n.t("interests.addRule")}
+        </button>
+
+        <!-- Smart episode filter -->
+        <label class="ml-[88px] flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
+          <input
+            type="checkbox"
+            checked={interest.smartEpisodeFilter}
+            onchange={() => updateInterest(interest.id, { smartEpisodeFilter: !interest.smartEpisodeFilter })}
+            class="rounded"
+          />
+          {i18n.t("interests.smartEpisodeFilter")}
+        </label>
       </div>
     {/each}
   </div>

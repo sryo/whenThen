@@ -94,6 +94,32 @@ interface TorrentInterestLink {
   interestName: string;
 }
 
+export interface Scraper {
+  id: string;
+  name: string;
+  baseUrl: string;
+  searchUrlTemplate?: string;
+  itemSelector: string;
+  titleSelector: string;
+  linkSelector: string;
+  sizeSelector?: string;
+  enabled: boolean;
+  requestDelayMs?: number;
+  checkInterval?: number;
+}
+
+interface ScraperTestResult {
+  items: ScrapedItem[];
+  totalCount: number;
+}
+
+interface ScrapedItem {
+  title: string;
+  magnetUri?: string;
+  torrentUrl?: string;
+  size?: number;
+}
+
 // Convert from Rust snake_case to JS camelCase
 function sourceFromRust(s: any): Source {
   return {
@@ -121,7 +147,7 @@ function sourceToRust(s: Source): any {
     last_checked: s.lastChecked,
     check_interval: s.checkInterval,
     next_check_at: s.nextCheckAt,
-    use_guid_dedup: s.useGuidDedup ?? false,
+    use_guid_dedup: s.useGuidDedup ?? true,
     etag: s.etag,
     last_modified: s.lastModified,
     failure_count: s.failureCount ?? 0,
@@ -130,15 +156,20 @@ function sourceToRust(s: Source): any {
 }
 
 function interestFromRust(i: any): Interest {
+  // Ensure filters array has at least one default filter
+  const filters = (i.filters && i.filters.length > 0)
+    ? i.filters.map((f: any) => ({
+        type: f.type,
+        value: f.value,
+        enabled: f.enabled,
+      }))
+    : [{ type: "must_contain" as const, value: "", enabled: true }];
+
   return {
     id: i.id,
     name: i.name,
     enabled: i.enabled,
-    filters: i.filters.map((f: any) => ({
-      type: f.type,
-      value: f.value,
-      enabled: f.enabled,
-    })),
+    filters,
     filterLogic: i.filter_logic || "and",
     downloadPath: i.download_path,
     smartEpisodeFilter: i.smart_episode_filter ?? false,
@@ -201,9 +232,40 @@ function badItemFromRust(b: any): BadItem {
   };
 }
 
+function scraperFromRust(s: any): Scraper {
+  return {
+    id: s.id,
+    name: s.name,
+    baseUrl: s.base_url,
+    searchUrlTemplate: s.search_url_template,
+    itemSelector: s.item_selector,
+    titleSelector: s.title_selector,
+    linkSelector: s.link_selector,
+    sizeSelector: s.size_selector,
+    enabled: s.enabled,
+    requestDelayMs: s.request_delay_ms,
+  };
+}
+
+function scraperToRust(s: Scraper): any {
+  return {
+    id: s.id,
+    name: s.name,
+    base_url: s.baseUrl,
+    search_url_template: s.searchUrlTemplate,
+    item_selector: s.itemSelector,
+    title_selector: s.titleSelector,
+    link_selector: s.linkSelector,
+    size_selector: s.sizeSelector,
+    enabled: s.enabled,
+    request_delay_ms: s.requestDelayMs ?? 500,
+  };
+}
+
 class FeedsState {
   sources = $state<Source[]>([]);
   interests = $state<Interest[]>([]);
+  scrapers = $state<Scraper[]>([]);
   pendingMatches = $state<PendingMatch[]>([]);
   // Track which interest each torrent came from (torrentId -> interestInfo)
   torrentInterests = $state<Map<number, TorrentInterestLink>>(new Map());
@@ -448,6 +510,83 @@ class FeedsState {
     }
   }
 
+  // Scraper operations
+  async loadScrapers() {
+    try {
+      const result: any[] = await invoke("scraper_list_configs");
+      this.scrapers = result.map(scraperFromRust);
+    } catch (e) {
+      console.error("Failed to load scrapers:", e);
+    }
+  }
+
+  async addScraper(scraper: Omit<Scraper, "id">): Promise<Scraper> {
+    const newScraper: Scraper = {
+      ...scraper,
+      id: crypto.randomUUID(),
+    };
+
+    try {
+      await invoke("scraper_add_config", { config: scraperToRust(newScraper) });
+      this.scrapers = [...this.scrapers, newScraper];
+      return newScraper;
+    } catch (e) {
+      console.error("Failed to add scraper:", e);
+      throw e;
+    }
+  }
+
+  async updateScraper(id: string, updates: Partial<Scraper>) {
+    const index = this.scrapers.findIndex((s) => s.id === id);
+    if (index < 0) return;
+
+    const updated = { ...this.scrapers[index], ...updates };
+
+    try {
+      await invoke("scraper_update_config", { config: scraperToRust(updated) });
+      this.scrapers[index] = updated;
+    } catch (e) {
+      console.error("Failed to update scraper:", e);
+      throw e;
+    }
+  }
+
+  async removeScraper(id: string) {
+    try {
+      await invoke("scraper_remove_config", { id });
+      this.scrapers = this.scrapers.filter((s) => s.id !== id);
+    } catch (e) {
+      console.error("Failed to remove scraper:", e);
+      throw e;
+    }
+  }
+
+  async toggleScraper(id: string, enabled: boolean) {
+    const index = this.scrapers.findIndex((s) => s.id === id);
+    if (index < 0) return;
+
+    try {
+      await invoke("scraper_toggle", { id, enabled });
+      this.scrapers[index] = { ...this.scrapers[index], enabled };
+    } catch (e) {
+      console.error("Failed to toggle scraper:", e);
+      throw e;
+    }
+  }
+
+  async testScraper(config: Scraper): Promise<ScraperTestResult> {
+    const result: any = await invoke("scraper_test", { config: scraperToRust(config) });
+    return {
+      items: result.items.map((item: any) => ({
+        title: item.title,
+        magnetUri: item.magnet_uri,
+        torrentUrl: item.torrent_url,
+        size: item.size,
+      })),
+      totalCount: result.total_count,
+    };
+  }
+
   // Legacy compatibility
   get feeds() {
     return this.sources;
@@ -456,6 +595,7 @@ class FeedsState {
   async loadFeeds() {
     await this.loadSources();
     await this.loadInterests();
+    await this.loadScrapers();
   }
 
   // Bad items operations

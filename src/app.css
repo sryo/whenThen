@@ -129,7 +129,9 @@ a {
   font-size: 12px;
   font-weight: 500;
   border-radius: 6px;
-  white-space: nowrap;
+  white-space: normal;
+  max-width: 280px;
+  text-align: center;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.1s;
@@ -148,6 +150,8 @@ a {
   transform: translateY(-50%);
   margin-top: 0;
   margin-right: 6px;
+  text-align: left;
+  min-width: 180px;
 }
 
 /* Eased spin animation for refresh icons */

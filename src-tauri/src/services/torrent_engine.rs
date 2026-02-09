@@ -102,11 +102,6 @@ pub async fn sync_restored_torrents(
         }
     };
 
-    let download_dir = {
-        let cfg = state.config.read().await;
-        expand_path(&cfg.download_directory)
-    };
-
     let torrent_list: Vec<_> = session.with_torrents(|torrents| {
         torrents.map(|(id, h)| (id, h.clone())).collect::<Vec<_>>()
     });
@@ -117,16 +112,13 @@ pub async fn sync_restored_torrents(
         let name = handle.name().unwrap_or_else(|| "Unknown".to_string());
         let stats = handle.stats();
 
-        // Remove completed torrents whose files were deleted externally.
+        // Don't restore completed torrents
         if stats.finished {
-            let output_path = download_dir.join(&name);
-            if !output_path.exists() {
-                info!(torrent_id = id, name = %name, "Removing completed torrent (files moved/deleted)");
-                let _ = session
-                    .delete(librqbit::api::TorrentIdOrHash::Id(id), false)
-                    .await;
-                continue;
-            }
+            info!(torrent_id = id, name = %name, "Removing completed torrent from session");
+            let _ = session
+                .delete(librqbit::api::TorrentIdOrHash::Id(id), false)
+                .await;
+            continue;
         }
 
         {
@@ -134,20 +126,14 @@ pub async fn sync_restored_torrents(
             names.entry(id).or_insert_with(|| name.clone());
         }
 
-        let state_val = if stats.finished {
-            TorrentState::Completed
-        } else {
-            match stats.state {
-                librqbit::TorrentStatsState::Paused => TorrentState::Paused,
-                librqbit::TorrentStatsState::Error => TorrentState::Error,
-                librqbit::TorrentStatsState::Initializing => TorrentState::Initializing,
-                _ => TorrentState::Downloading,
-            }
+        let state_val = match stats.state {
+            librqbit::TorrentStatsState::Paused => TorrentState::Paused,
+            librqbit::TorrentStatsState::Error => TorrentState::Error,
+            librqbit::TorrentStatsState::Initializing => TorrentState::Initializing,
+            _ => TorrentState::Downloading,
         };
 
-        if state_val != TorrentState::Completed {
-            spawn_progress_emitter(state, app_handle.clone(), id);
-        }
+        spawn_progress_emitter(state, app_handle.clone(), id);
 
         let total_bytes = stats.total_bytes;
         let downloaded = stats.progress_bytes;
@@ -236,13 +222,18 @@ pub async fn add_magnet(
         ..Default::default()
     };
 
+    debug!("Adding magnet: {}", &magnet_url);
+
     let response = session
         .add_torrent(
             AddTorrent::from_url(&magnet_url),
             Some(add_opts),
         )
         .await
-        .map_err(|e| WhenThenError::Torrent(format!("Failed to add magnet: {e}")))?;
+        .map_err(|e| {
+            warn!("Failed to add magnet: {}", e);
+            WhenThenError::Torrent(format!("Failed to add magnet: {e}"))
+        })?;
 
     let (handle, is_new) = match response {
         AddTorrentResponse::Added(_, handle) => (handle, true),
@@ -979,12 +970,42 @@ pub async fn move_torrent_files(state: &AppState, torrent_id: usize, destination
     if source_path.exists() {
         if source_path.is_dir() {
             let target = dest_path.join(&torrent_name);
-            std::fs::rename(&source_path, &target).map_err(|e| {
-                WhenThenError::Internal(format!("Failed to move files: {e}"))
-            })?;
+            // Try rename first; if target exists, merge contents instead
+            if let Err(e) = std::fs::rename(&source_path, &target) {
+                if target.exists() && target.is_dir() {
+                    // Merge: move each item from source into target
+                    for entry in std::fs::read_dir(&source_path).map_err(|e| {
+                        WhenThenError::Internal(format!("Failed to read source directory: {e}"))
+                    })? {
+                        let entry = entry.map_err(|e| {
+                            WhenThenError::Internal(format!("Failed to read directory entry: {e}"))
+                        })?;
+                        let item_target = target.join(entry.file_name());
+                        // If item already exists in target, remove it first
+                        if item_target.exists() {
+                            if item_target.is_dir() {
+                                std::fs::remove_dir_all(&item_target).ok();
+                            } else {
+                                std::fs::remove_file(&item_target).ok();
+                            }
+                        }
+                        std::fs::rename(entry.path(), &item_target).map_err(|e| {
+                            WhenThenError::Internal(format!("Failed to move {}: {e}", entry.file_name().to_string_lossy()))
+                        })?;
+                    }
+                    // Remove the now-empty source directory
+                    std::fs::remove_dir(&source_path).ok();
+                } else {
+                    return Err(WhenThenError::Internal(format!("Failed to move files: {e}")));
+                }
+            }
         } else {
             let file_name = source_path.file_name().unwrap_or_default();
             let target = dest_path.join(file_name);
+            // If target file exists, remove it first
+            if target.exists() {
+                std::fs::remove_file(&target).ok();
+            }
             std::fs::rename(&source_path, &target).map_err(|e| {
                 WhenThenError::Internal(format!("Failed to move file: {e}"))
             })?;
@@ -1005,6 +1026,10 @@ pub async fn move_torrent_files(state: &AppState, torrent_id: usize, destination
             if alt_source.exists() {
                 let file_name = alt_source.file_name().unwrap_or_default();
                 let target = dest_path.join(file_name);
+                // If target file exists, remove it first
+                if target.exists() {
+                    std::fs::remove_file(&target).ok();
+                }
                 std::fs::rename(&alt_source, &target).map_err(|e| {
                     WhenThenError::Internal(format!("Failed to move file: {e}"))
                 })?;
@@ -1021,6 +1046,9 @@ pub async fn move_torrent_files(state: &AppState, torrent_id: usize, destination
             )));
         }
     }
+
+    // Record the new location for subtitle searches and other operations
+    state.torrent_locations.write().await.insert(torrent_id, dest_path.to_string_lossy().to_string());
 
     Ok(())
 }

@@ -40,7 +40,7 @@ export async function torrentAddMagnet(
   magnetUrl: string,
   options?: TorrentAddOptions,
 ): Promise<TorrentAddedResponse> {
-  return invokeWithTimeout("torrent_add_magnet", { magnetUrl, options }, 60_000);
+  return invokeWithTimeout("torrent_add_magnet", { magnet_url: magnetUrl, options }, 60_000);
 }
 
 export async function torrentAddFile(
@@ -54,7 +54,7 @@ export async function torrentAddBytes(
   fileBytes: number[],
   options?: TorrentAddOptions,
 ): Promise<TorrentAddedResponse> {
-  return invokeWithTimeout("torrent_add_bytes", { fileBytes, options }, 60_000);
+  return invokeWithTimeout("torrent_add_bytes", { file_bytes: fileBytes, options }, 60_000);
 }
 
 export async function torrentSyncRestored(): Promise<TorrentSummary[]> {
