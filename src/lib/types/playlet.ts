@@ -9,7 +9,7 @@ export interface TriggerConfig {
 
 // Condition types
 export type ConditionField = "name" | "total_size" | "file_count";
-export type ConditionOperator = "contains" | "not_contains" | "starts_with" | "ends_with" | "equals";
+export type ConditionOperator = "contains" | "not_contains" | "starts_with" | "ends_with" | "equals" | "regex";
 export type SizeOperator = "gt" | "lt" | "between";
 
 export interface TriggerCondition {

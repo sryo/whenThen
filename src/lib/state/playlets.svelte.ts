@@ -478,6 +478,13 @@ export const playletsState = {
           case "equals":
             result = name === val;
             break;
+          case "regex":
+            try {
+              result = new RegExp(c.value, "i").test(torrentName);
+            } catch {
+              result = false;
+            }
+            break;
         }
       }
 
