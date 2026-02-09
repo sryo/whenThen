@@ -47,6 +47,8 @@ export const torrentsState = {
         download_speed: progress.download_speed,
         upload_speed: progress.upload_speed,
         peers_connected: progress.peers_connected,
+        queued_peers: progress.queued_peers ?? 0,
+        connecting_peers: progress.connecting_peers ?? 0,
         downloaded_bytes: progress.downloaded_bytes,
         uploaded_bytes: progress.uploaded_bytes ?? 0,
         total_bytes: progress.total_bytes,

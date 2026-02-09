@@ -43,6 +43,9 @@ pub struct AppConfig {
     pub rss_check_interval_minutes: u32,
     #[serde(default = "default_locale")]
     pub locale: String,
+    /// Metadata fetch timeout in seconds (default 30)
+    #[serde(default = "default_metadata_timeout")]
+    pub metadata_timeout_secs: u32,
 }
 
 fn default_rss_interval() -> u32 {
@@ -51,6 +54,10 @@ fn default_rss_interval() -> u32 {
 
 fn default_locale() -> String {
     "system".to_string()
+}
+
+fn default_metadata_timeout() -> u32 {
+    30
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -104,6 +111,7 @@ impl Default for AppConfig {
             default_move_destination: String::new(),
             rss_check_interval_minutes: default_rss_interval(),
             locale: default_locale(),
+            metadata_timeout_secs: default_metadata_timeout(),
         }
     }
 }

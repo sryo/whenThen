@@ -4,6 +4,7 @@ import { playbackState } from "$lib/state/playback.svelte";
 import { devicesState } from "$lib/state/devices.svelte";
 import { settingsState } from "$lib/state/settings.svelte";
 import { uiState } from "$lib/state/ui.svelte";
+import { t } from "$lib/i18n";
 import type {
   CastAction,
   MoveAction,
@@ -27,6 +28,7 @@ import {
   runShellCommand,
   torrentDelete,
   checkAutomationPermission,
+  getPlaylistUrl,
 } from "./tauri-commands";
 import { registerExecutor, getExecutor } from "./execution-registry";
 
@@ -73,26 +75,33 @@ registerExecutor("move", async (action, torrentId) => {
 });
 
 registerExecutor("notify", async (_action, _torrentId, torrentName) => {
+  const msg = t("toast.torrentDone", { name: torrentName });
   if ("Notification" in window) {
     if (Notification.permission === "granted") {
-      new Notification("whenThen", { body: `${torrentName} done` });
+      new Notification("whenThen", { body: msg });
     } else if (Notification.permission !== "denied") {
       const permission = await Notification.requestPermission();
       if (permission === "granted") {
-        new Notification("whenThen", { body: `${torrentName} done` });
+        new Notification("whenThen", { body: msg });
       }
     }
   }
-  uiState.addToast(`${torrentName} done`, "success");
+  uiState.addToast(msg, "success");
 });
 
 registerExecutor("play", async (action, torrentId, _torrentName, files) => {
   const playAction = action as PlayAction;
   const app = playAction.app || settingsState.settings.default_media_player;
   if (!app) throw new SkipError("No media player");
-  const playable = files.find((f) => f.is_playable);
-  if (!playable) throw new Error("No playable files");
-  await playbackOpenInApp(torrentId, playable.index, app);
+
+  if (playAction.usePlaylist) {
+    const playlistUrl = await getPlaylistUrl(torrentId);
+    await runShellCommand(`open -a "${app}" "${playlistUrl}"`);
+  } else {
+    const playable = files.find((f) => f.is_playable);
+    if (!playable) throw new Error("No playable files");
+    await playbackOpenInApp(torrentId, playable.index, app);
+  }
 });
 
 registerExecutor("subtitle", async (action, torrentId, _torrentName, files) => {

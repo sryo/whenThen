@@ -133,7 +133,7 @@ registerAction({
   icon: MonitorPlay,
   color: "var(--color-error)",
   configLabelKey: "actions.play.config",
-  defaultData: { app: "" },
+  defaultData: { app: "", usePlaylist: false },
 });
 
 registerAction({

@@ -44,7 +44,7 @@ export async function setupEventListeners() {
   unlisteners.push(
     await listen<DeviceConnectedEvent>("chromecast:connected", (event) => {
       devicesState.updateDeviceStatus(event.payload.id, "connected");
-      uiState.addToast(`Connected to ${event.payload.name}`, "success");
+      uiState.addToast(t("toast.connectedTo", { name: event.payload.name }), "success");
     }),
   );
 
@@ -53,7 +53,7 @@ export async function setupEventListeners() {
       "chromecast:disconnected",
       (event) => {
         devicesState.updateDeviceStatus(event.payload.id, "discovered");
-        uiState.addToast(`Device disconnected`, "info");
+        uiState.addToast(t("toast.deviceDisconnected"), "info");
       },
     ),
   );
@@ -63,7 +63,7 @@ export async function setupEventListeners() {
       "chromecast:connection-error",
       (event) => {
         devicesState.updateDeviceStatus(event.payload.id, "error");
-        uiState.addToast(`Couldn't connect: ${event.payload.error}`, "error");
+        uiState.addToast(t("toast.couldntConnect", { error: event.payload.error }), "error");
       },
     ),
   );
@@ -71,12 +71,12 @@ export async function setupEventListeners() {
   // Torrent events
   unlisteners.push(
     await listen<TorrentAddedResponse>("torrent:added", (event) => {
-      const t = event.payload;
+      const torrent = event.payload;
 
       torrentsState.addTorrent({
-        id: t.id,
-        name: t.name,
-        info_hash: t.info_hash,
+        id: torrent.id,
+        name: torrent.name,
+        info_hash: torrent.info_hash,
         state: "initializing",
         progress: 0,
         download_speed: 0,
@@ -84,16 +84,16 @@ export async function setupEventListeners() {
         peers_connected: 0,
         total_bytes: 0,
         downloaded_bytes: 0,
-        file_count: t.files.length,
+        file_count: torrent.files.length,
       });
-      uiState.addToast(`${t.name} added`, "success");
+      uiState.addToast(t("toast.torrentAdded", { name: torrent.name }), "success");
 
       // Manual card drop handles its own assignment
       if (shouldSkipAutoAssign()) return;
 
-      const match = findBestMatch(t.name, "torrent_added", undefined, t.files.length);
+      const match = findBestMatch(torrent.name, "torrent_added", undefined, torrent.files.length);
       if (match) {
-        assignTorrentToPlaylet(match.id, t);
+        assignTorrentToPlaylet(match.id, torrent);
       }
     }),
   );
@@ -118,7 +118,7 @@ export async function setupEventListeners() {
           file_count: 0,
         });
         tasksState.updateTorrentId(old_id, new_id);
-        uiState.addToast("Rechecking pieces", "info");
+        uiState.addToast(t("toast.recheckingPieces"), "info");
       },
     ),
   );
@@ -143,7 +143,7 @@ export async function setupEventListeners() {
           file_count: 0,
         });
         tasksState.updateTorrentId(old_id, new_id);
-        uiState.addToast("File selection updated", "info");
+        uiState.addToast(t("toast.fileSelectionUpdated"), "info");
       },
     ),
   );
@@ -157,10 +157,10 @@ export async function setupEventListeners() {
   unlisteners.push(
     await listen<number>("torrent:completed", async (event) => {
       const torrentId = event.payload;
-      uiState.addToast("Download finished", "success");
+      uiState.addToast(t("toast.downloadFinished"), "success");
 
       // Send native notification
-      const torrent = torrentsState.torrents.find((t) => t.id === torrentId);
+      const torrent = torrentsState.torrents.find((tr) => tr.id === torrentId);
       if (torrent) {
         await notifyDownloadComplete(torrent.name);
       }
@@ -174,8 +174,11 @@ export async function setupEventListeners() {
   );
 
   unlisteners.push(
-    await listen<{ id: number; error: string }>("torrent:error", (event) => {
-      uiState.addToast(`Download failed: ${event.payload.error}`, "error");
+    await listen<{ id: number; error: string } | string>("torrent:error", (event) => {
+      const msg = typeof event.payload === "string"
+        ? event.payload
+        : event.payload.error;
+      uiState.addToast(t("toast.downloadFailed", { error: msg }), "error");
     }),
   );
 
@@ -227,7 +230,7 @@ export async function setupEventListeners() {
     await listen<{ device_id: string; error: string }>(
       "playback:error",
       (event) => {
-        uiState.addToast(`Couldn't play: ${event.payload.error}`, "error");
+        uiState.addToast(t("toast.couldntPlay", { error: event.payload.error }), "error");
       },
     ),
   );

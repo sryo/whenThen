@@ -1,6 +1,7 @@
 import { playletsState, derivePlayletName } from "$lib/state/playlets.svelte";
 import { tasksState } from "$lib/state/tasks.svelte";
 import { uiState } from "$lib/state/ui.svelte";
+import { t } from "$lib/i18n";
 import type { TorrentAddedResponse } from "$lib/types/torrent";
 import type { Playlet, TriggerType } from "$lib/types/playlet";
 
@@ -86,26 +87,27 @@ export function assignTorrentToPlaylet(
 ): boolean {
   const playlet = playletsState.getById(playletId);
   if (!playlet) return false;
+  const playletName = derivePlayletName(playlet);
   if (!playlet.enabled) {
-    uiState.addToast(`"${derivePlayletName(playlet)}" is disabled`, "warning");
+    uiState.addToast(t("toast.playletDisabled", { name: playletName }), "warning");
     return false;
   }
   if (!manual) {
     if (playlet.trigger.type !== "torrent_added") {
-      uiState.addToast(`"${derivePlayletName(playlet)}" doesn't trigger on add`, "warning");
+      uiState.addToast(t("toast.playletNoTriggerOnAdd", { name: playletName }), "warning");
       return false;
     }
     if (!playletsState.matchesConditions(playlet, response.name)) {
-      uiState.addToast(`"${response.name}" doesn't match "${derivePlayletName(playlet)}"`, "warning");
+      uiState.addToast(t("toast.playletNoMatch", { torrent: response.name, playlet: playletName }), "warning");
       return false;
     }
   }
   const existing = tasksState.getByTorrentId(response.id);
   if (existing) {
-    uiState.addToast(`"${response.name}" already has an active task`, "warning");
+    uiState.addToast(t("toast.alreadyHasTask", { name: response.name }), "warning");
     return false;
   }
-  tasksState.createTask(response.id, response.name, playlet.id, derivePlayletName(playlet));
-  uiState.addToast(`"${derivePlayletName(playlet)}" applied`, "success");
+  tasksState.createTask(response.id, response.name, playlet.id, playletName);
+  uiState.addToast(t("toast.playletApplied", { name: playletName }), "success");
   return true;
 }

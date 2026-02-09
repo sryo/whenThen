@@ -108,7 +108,7 @@
     <button
       disabled
       class="rounded-full p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)] disabled:opacity-40"
-      title="Previous"
+      title={i18n.t("common.previous")}
     >
       <SkipBack class="h-4 w-4" />
     </button>
@@ -180,7 +180,7 @@
         class="flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
       >
         <Cast class="h-4 w-4" />
-        <span class="max-w-32 truncate">{deviceName ?? "Device"}</span>
+        <span class="max-w-32 truncate">{deviceName ?? i18n.t("common.device")}</span>
         <ChevronDown class="h-3 w-3" />
       </button>
 

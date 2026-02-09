@@ -43,6 +43,9 @@ pub enum WhenThenError {
 
     #[error("RSS error: {0}")]
     Rss(String),
+
+    #[error("Scraper error: {0}")]
+    Scraper(String),
 }
 
 // Type alias for backwards compatibility

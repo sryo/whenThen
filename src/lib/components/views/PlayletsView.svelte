@@ -200,7 +200,7 @@
           if (ok) pipFromCard(dropTarget);
         }
       } catch (err: any) {
-        uiState.addToast(`Could not add torrent: ${err?.message || String(err)}`, "error");
+        uiState.addToast(i18n.t("toast.couldNotAddTorrent", { error: err?.message || String(err) }), "error");
       }
       return;
     }
@@ -221,7 +221,7 @@
             if (ok) pipFromCard(dropTarget);
           }
         } catch (err: any) {
-          uiState.addToast(`Could not add torrent: ${err?.message || String(err)}`, "error");
+          uiState.addToast(i18n.t("toast.couldNotAddTorrent", { error: err?.message || String(err) }), "error");
         }
       }
     }

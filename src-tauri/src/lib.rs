@@ -372,6 +372,7 @@ pub fn run() {
             commands::media::subtitle_load_file,
             commands::media::subtitle_clear,
             commands::media::media_server_url,
+            commands::media::get_playlist_url,
             commands::media::list_media_players,
             commands::media::move_torrent_files,
             commands::media::subtitle_search_opensubtitles,
@@ -416,6 +417,13 @@ pub fn run() {
             commands::rss::rss_list_bad,
             // RSS demo data
             commands::rss::rss_seed_demo,
+            // Scraper commands
+            commands::scraper::scraper_add_config,
+            commands::scraper::scraper_update_config,
+            commands::scraper::scraper_remove_config,
+            commands::scraper::scraper_list_configs,
+            commands::scraper::scraper_toggle,
+            commands::scraper::scraper_test,
             // i18n commands
             get_translations,
         ])
@@ -557,6 +565,15 @@ pub fn run() {
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             RunEvent::Opened { urls } => {
                 handle_opened_urls(app_handle, urls);
+            }
+            #[cfg(target_os = "macos")]
+            RunEvent::Reopen { .. } => {
+                // Dock icon clicked - show main window
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                }
             }
             RunEvent::ExitRequested { api, .. } => {
                 let state = app_handle.state::<AppState>();

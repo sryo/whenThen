@@ -277,10 +277,10 @@
             {#each devicesState.devices as device}
               <button
                 onclick={() => playletsState.updateAction<CastAction>(playletId, action.id, { deviceId: device.id })}
-                class="flex items-center gap-2 truncate rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80 {(action as CastAction).deviceId === device.id ? 'bg-white/25 text-white' : 'bg-black/20 text-white/70'}"
+                class="flex items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80 {(action as CastAction).deviceId === device.id ? 'bg-white/25 text-white' : 'bg-black/20 text-white/70'}"
               >
                 <Tv class="h-4 w-4 shrink-0" />
-                {device.name}
+                <span class="truncate">{device.name}</span>
               </button>
             {/each}
           </div>
@@ -297,32 +297,44 @@
           {i18n.t("actions.systemNotification")}
         </span>
       {:else if action.type === "play"}
-        {@const currentApp = (action as PlayAction).app}
+        {@const playAction = action as PlayAction}
+        {@const currentApp = playAction.app}
         {@const isCustom = currentApp && !mediaPlayers.some((p) => p.name === currentApp)}
+        <div class="mb-2">
+          <label class="flex items-center gap-2 text-sm text-white/80">
+            <input
+              type="checkbox"
+              checked={playAction.usePlaylist}
+              onchange={() => playletsState.updateAction<PlayAction>(playletId, action.id, { usePlaylist: !playAction.usePlaylist })}
+              class="rounded"
+            />
+            {i18n.t("actions.playPlaylist")}
+          </label>
+        </div>
         <div class="grid grid-cols-2 gap-2">
           {#each mediaPlayers as player}
             <button
               onclick={() => playletsState.updateAction<PlayAction>(playletId, action.id, { app: player.name })}
-              class="flex items-center gap-2 truncate rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80 {currentApp === player.name ? 'bg-white/25 text-white' : 'bg-black/20 text-white/70'}"
+              class="flex items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80 {currentApp === player.name ? 'bg-white/25 text-white' : 'bg-black/20 text-white/70'}"
             >
               <MonitorPlay class="h-4 w-4 shrink-0" />
-              {player.name}
+              <span class="truncate">{player.name}</span>
             </button>
           {/each}
           {#if isCustom}
             <button
-              class="flex items-center gap-2 truncate rounded-lg px-3 py-2 text-sm font-medium bg-white/25 text-white"
+              class="flex items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium bg-white/25 text-white"
             >
               <MonitorPlay class="h-4 w-4 shrink-0" />
-              {currentApp}
+              <span class="truncate">{currentApp}</span>
             </button>
           {/if}
           <button
             onclick={pickCustomApp}
-            class="flex items-center gap-2 truncate rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80 bg-black/20 text-white/70"
+            class="flex items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80 bg-black/20 text-white/70"
           >
             <Ellipsis class="h-4 w-4 shrink-0" />
-            {i18n.t("common.other")}
+            <span class="truncate">{i18n.t("common.other")}</span>
           </button>
         </div>
       {:else if action.type === "subtitle"}

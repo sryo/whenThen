@@ -28,6 +28,11 @@ async fn persist_sources(app: &tauri::AppHandle, state: &AppState) {
     }
 }
 
+/// Internal version callable from rss service.
+pub async fn persist_sources_internal(app: &tauri::AppHandle, state: &AppState) {
+    persist_sources(app, state).await;
+}
+
 async fn persist_interests(app: &tauri::AppHandle, state: &AppState) {
     if let Ok(store) = app.store(INTERESTS_STORE) {
         let interests = state.rss_state.interests.read().await;

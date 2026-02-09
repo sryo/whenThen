@@ -8,6 +8,18 @@ export interface Source {
   url: string;
   enabled: boolean;
   lastChecked?: string;
+  // Per-source check interval in minutes (overrides global setting)
+  checkInterval?: number;
+  // Next scheduled check timestamp
+  nextCheckAt?: string;
+  // Use feed GUID instead of item ID for deduplication
+  useGuidDedup?: boolean;
+  // HTTP caching headers
+  etag?: string;
+  lastModified?: string;
+  // Backoff state
+  failureCount?: number;
+  retryAfter?: string;
 }
 
 export interface Interest {
@@ -16,10 +28,14 @@ export interface Interest {
   enabled: boolean;
   filters: FeedFilter[];
   filterLogic: "and" | "or";
+  // Custom download folder for matched torrents
+  downloadPath?: string;
+  // Enable smart episode detection to prevent duplicate episodes
+  smartEpisodeFilter?: boolean;
 }
 
 export interface FeedFilter {
-  type: "must_contain" | "must_not_contain" | "regex" | "size_range";
+  type: "must_contain" | "must_not_contain" | "regex" | "size_range" | "wildcard";
   value: string;
   enabled: boolean;
 }
@@ -86,6 +102,13 @@ function sourceFromRust(s: any): Source {
     url: s.url,
     enabled: s.enabled,
     lastChecked: s.last_checked,
+    checkInterval: s.check_interval,
+    nextCheckAt: s.next_check_at,
+    useGuidDedup: s.use_guid_dedup,
+    etag: s.etag,
+    lastModified: s.last_modified,
+    failureCount: s.failure_count,
+    retryAfter: s.retry_after,
   };
 }
 
@@ -96,6 +119,13 @@ function sourceToRust(s: Source): any {
     url: s.url,
     enabled: s.enabled,
     last_checked: s.lastChecked,
+    check_interval: s.checkInterval,
+    next_check_at: s.nextCheckAt,
+    use_guid_dedup: s.useGuidDedup ?? false,
+    etag: s.etag,
+    last_modified: s.lastModified,
+    failure_count: s.failureCount ?? 0,
+    retry_after: s.retryAfter,
   };
 }
 
@@ -110,6 +140,8 @@ function interestFromRust(i: any): Interest {
       enabled: f.enabled,
     })),
     filterLogic: i.filter_logic || "and",
+    downloadPath: i.download_path,
+    smartEpisodeFilter: i.smart_episode_filter ?? false,
   };
 }
 
@@ -124,6 +156,8 @@ function interestToRust(i: Interest): any {
       enabled: f.enabled,
     })),
     filter_logic: i.filterLogic,
+    download_path: i.downloadPath,
+    smart_episode_filter: i.smartEpisodeFilter ?? false,
   };
 }
 

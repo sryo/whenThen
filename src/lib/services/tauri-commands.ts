@@ -158,6 +158,10 @@ export async function subtitleLoadFile(
   return invoke("subtitle_load_file", { path });
 }
 
+export async function getPlaylistUrl(torrentId: number): Promise<string> {
+  return invoke("get_playlist_url", { torrentId });
+}
+
 // Subtitle search commands
 export interface SubtitleDownloadResult {
   file_name: string;

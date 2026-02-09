@@ -14,6 +14,8 @@ export interface TorrentSummary {
   download_speed: number;
   upload_speed: number;
   peers_connected: number;
+  queued_peers: number;
+  connecting_peers: number;
   total_bytes: number;
   downloaded_bytes: number;
   uploaded_bytes?: number;
@@ -47,6 +49,8 @@ export interface TorrentProgress {
   download_speed: number;
   upload_speed: number;
   peers_connected: number;
+  queued_peers: number;
+  connecting_peers: number;
   downloaded_bytes: number;
   uploaded_bytes: number;
   total_bytes: number;

@@ -4,7 +4,7 @@ use tracing::info;
 
 use crate::errors::{WhenThenError, Result};
 use crate::models::SubtitleDownloadResult;
-use crate::services::opensub_client;
+use crate::services::{media_info, opensub_client, subtitle_scorer, torrent_engine::expand_path};
 use crate::state::AppState;
 
 pub async fn search_and_download(
@@ -19,11 +19,6 @@ pub async fn search_and_download(
         (cfg.opensubtitles_api_key.clone(), cfg.download_directory.clone())
     };
 
-    if api_key.is_empty() {
-        return Err(WhenThenError::OpenSubtitles(
-            "No OpenSubtitles API key configured. Set one in Settings.".to_string(),
-        ));
-    }
 
     // Get torrent handle and file info
     let session = {
@@ -57,7 +52,7 @@ pub async fn search_and_download(
     let torrent_name = handle.name().unwrap_or_else(|| "Unknown".to_string());
 
     // Build the absolute path to the video file
-    let video_file_path = PathBuf::from(&download_dir).join(file_path_str);
+    let video_file_path = expand_path(&download_dir).join(file_path_str);
     let video_file_name = video_file_path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -75,40 +70,23 @@ pub async fn search_and_download(
         video_file_name, languages, movie_hash
     );
 
-    // Search OpenSubtitles
-    let results = opensub_client::search(
+    // Parse video file metadata for scoring
+    let video_info = media_info::parse(&video_file_name);
+
+    // OpenSubtitles requires an API key
+    if api_key.is_empty() {
+        return Err(WhenThenError::OpenSubtitles(
+            "OpenSubtitles API key not configured. Add your API key in Settings to enable subtitle search.".into()
+        ));
+    }
+
+    let (original_name, content, selected_lang) = search_opensubtitles(
         &api_key,
         &languages,
         &video_file_name,
         movie_hash.as_deref(),
-    )
-    .await?;
-
-    if results.is_empty() {
-        return Err(WhenThenError::OpenSubtitles(format!(
-            "No subtitles found for '{}'",
-            video_file_name
-        )));
-    }
-
-    // Pick best result: prefer hash matches (higher download_count usually), then highest rating
-    let best = results
-        .iter()
-        .max_by(|a, b| {
-            a.ratings
-                .partial_cmp(&b.ratings)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then(a.download_count.cmp(&b.download_count))
-        })
-        .unwrap(); // safe: we checked non-empty
-
-    info!(
-        "Selected subtitle: {} (language: {}, rating: {}, downloads: {})",
-        best.file_name, best.language, best.ratings, best.download_count
-    );
-
-    // Download the subtitle file
-    let (original_name, content) = opensub_client::download(&api_key, best.file_id).await?;
+        &video_info,
+    ).await?;
 
     // Determine output path alongside the video file
     let extension = original_name
@@ -116,7 +94,7 @@ pub async fn search_and_download(
         .next()
         .unwrap_or("srt");
 
-    let subtitle_filename = format!("{}.{}.{}", video_file_name, best.language, extension);
+    let subtitle_filename = format!("{}.{}.{}", video_file_name, selected_lang, extension);
     let output_dir = video_file_path
         .parent()
         .map(|p| p.to_path_buf())
@@ -137,4 +115,48 @@ pub async fn search_and_download(
         file_name: subtitle_filename,
         file_path: output_path.to_string_lossy().to_string(),
     })
+}
+
+/// Search OpenSubtitles and return best match using scoring.
+async fn search_opensubtitles(
+    api_key: &str,
+    languages: &[String],
+    video_file_name: &str,
+    movie_hash: Option<&str>,
+    video_info: &crate::models::MediaInfo,
+) -> Result<(String, Vec<u8>, String)> {
+    let results = opensub_client::search(api_key, languages, video_file_name, movie_hash).await?;
+
+    if results.is_empty() {
+        return Err(WhenThenError::OpenSubtitles(format!(
+            "No subtitles found for '{}'",
+            video_file_name
+        )));
+    }
+
+    // Score each result and pick the best
+    let mut scored: Vec<_> = results
+        .iter()
+        .map(|r| {
+            let sub_info = media_info::parse(&r.file_name);
+            let score = subtitle_scorer::score_infos(video_info, &sub_info);
+            (r, score)
+        })
+        .collect();
+
+    // Sort by score descending, then by download count as tiebreaker
+    scored.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(b.0.download_count.cmp(&a.0.download_count))
+    });
+
+    let best = scored[0].0;
+    info!(
+        "Selected subtitle: {} (language: {}, score: {:.2}, downloads: {})",
+        best.file_name, best.language, scored[0].1, best.download_count
+    );
+
+    let (original_name, content) = opensub_client::download(api_key, best.file_id).await?;
+    Ok((original_name, content, best.language.clone()))
 }

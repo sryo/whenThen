@@ -73,6 +73,7 @@ export interface NotifyAction extends ActionBase {
 export interface PlayAction extends ActionBase {
   type: "play";
   app: string;
+  usePlaylist?: boolean;
 }
 
 export interface SubtitleAction extends ActionBase {

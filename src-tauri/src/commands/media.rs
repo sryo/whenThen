@@ -52,6 +52,13 @@ pub async fn media_server_url(state: State<'_, AppState>) -> Result<String> {
 }
 
 #[tauri::command]
+pub async fn get_playlist_url(state: State<'_, AppState>, torrent_id: usize) -> Result<String> {
+    let local_ip = get_local_ip();
+    let port = state.media_server.port;
+    Ok(format!("http://{}:{}/torrent/{}/playlist.m3u8", local_ip, port, torrent_id))
+}
+
+#[tauri::command]
 pub async fn move_torrent_files(
     state: State<'_, AppState>,
     torrent_id: usize,
@@ -98,10 +105,7 @@ mod launch_services {
     type Boolean = u8;
 
     type LSRolesMask = u32;
-    // kLSRolesAll = 0xFFFFFFFF — matches any role (viewer, editor, etc.)
     const K_LS_ROLES_ALL: LSRolesMask = 0xFFFFFFFF;
-
-    // kCFStringEncodingUTF8 = 0x08000100
     const K_CF_STRING_ENCODING_UTF8: u32 = 0x08000100;
 
     #[link(name = "CoreFoundation", kind = "framework")]
@@ -184,7 +188,7 @@ mod launch_services {
         }
     }
 
-    /// Collect bundle IDs registered for a UTI (any role).
+    /// Collect bundle IDs for a UTI.
     unsafe fn bundle_ids_for_uti(uti: &str) -> Vec<String> {
         let cf_uti = cfstring_from_str(uti);
         if cf_uti.is_null() {
@@ -229,7 +233,6 @@ mod launch_services {
         path
     }
 
-    /// Display name from an app path: last path component minus `.app`.
     fn display_name_from_path(path: &str) -> String {
         let file = path.rsplit('/').next().unwrap_or(path);
         file.strip_suffix(".app").unwrap_or(file).to_string()

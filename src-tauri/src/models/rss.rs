@@ -9,6 +9,27 @@ pub struct Source {
     pub name: String,
     pub url: String,
     pub enabled: bool,
+    /// Per-source check interval in minutes (overrides global setting).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub check_interval: Option<u32>,
+    /// Next scheduled check timestamp (ISO 8601).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_check_at: Option<String>,
+    /// Use feed GUID instead of item ID for deduplication.
+    #[serde(default)]
+    pub use_guid_dedup: bool,
+    /// HTTP ETag for conditional requests.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub etag: Option<String>,
+    /// HTTP Last-Modified for conditional requests.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_modified: Option<String>,
+    /// Consecutive failure count for backoff calculation.
+    #[serde(default)]
+    pub failure_count: u32,
+    /// Don't retry until this timestamp (ISO 8601).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retry_after: Option<String>,
     /// Deprecated: interval is now global in settings. Kept for backwards compat.
     #[serde(default)]
     pub check_interval_minutes: u32,
@@ -28,6 +49,12 @@ pub struct Interest {
     /// Search term for {search} placeholder URLs. Defaults to interest name if not set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub search_term: Option<String>,
+    /// Custom download folder for matched torrents.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub download_path: Option<String>,
+    /// Enable smart episode detection to prevent duplicate episodes.
+    #[serde(default)]
+    pub smart_episode_filter: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -53,6 +80,8 @@ pub enum FilterType {
     MustNotContain,
     Regex,
     SizeRange,
+    /// Wildcard pattern (* and ? syntax).
+    Wildcard,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

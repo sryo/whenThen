@@ -8,6 +8,7 @@ import {
 import { devicesState } from "$lib/state/devices.svelte";
 import { subtitlesState } from "$lib/state/subtitles.svelte";
 import { uiState } from "$lib/state/ui.svelte";
+import { t } from "$lib/i18n";
 import type { TorrentAddedResponse } from "$lib/types/torrent";
 
 export type DropContentType =
@@ -88,7 +89,7 @@ export async function handleDroppedContent(input: string): Promise<TorrentAddedR
       case "subtitle": {
         const info = await subtitleLoadFile(input);
         subtitlesState.setSubtitle(info);
-        uiState.addToast(`Loaded subtitle: ${info.name}`, "success");
+        uiState.addToast(t("toast.loadedSubtitle", { name: info.name }), "success");
         return null;
       }
 
@@ -96,20 +97,20 @@ export async function handleDroppedContent(input: string): Promise<TorrentAddedR
         const connected = devicesState.connectedDevices;
         if (connected.length > 0) {
           await playbackCastLocalFile(connected[0].id, input);
-          uiState.addToast("Playing on device", "info");
+          uiState.addToast(t("toast.playingOnDevice"), "info");
         } else {
-          uiState.addToast("No device connected", "warning");
+          uiState.addToast(t("toast.noDeviceConnected"), "warning");
         }
         return null;
       }
 
       case "unknown":
-        uiState.addToast("Can't use this file type", "warning");
+        uiState.addToast(t("toast.cantUseFileType"), "warning");
         return null;
     }
   } catch (err: any) {
     const msg = err?.message || String(err);
-    uiState.addToast(`Something went wrong: ${msg}`, "error");
+    uiState.addToast(t("toast.somethingWentWrong", { error: msg }), "error");
     return null;
   }
 }
@@ -117,7 +118,7 @@ export async function handleDroppedContent(input: string): Promise<TorrentAddedR
 /** Read a File object's bytes and add it as a torrent. Only handles .torrent files. */
 export async function handleDroppedFile(file: File): Promise<TorrentAddedResponse | null> {
   if (!file.name.toLowerCase().endsWith(".torrent")) {
-    uiState.addToast("Can't use this file type", "warning");
+    uiState.addToast(t("toast.cantUseFileType"), "warning");
     return null;
   }
 
@@ -127,7 +128,7 @@ export async function handleDroppedFile(file: File): Promise<TorrentAddedRespons
     return await torrentAddBytes(bytes);
   } catch (err: any) {
     const msg = err?.message || String(err);
-    uiState.addToast(`Could not add torrent: ${msg}`, "error");
+    uiState.addToast(t("toast.couldNotAddTorrent", { error: msg }), "error");
     return null;
   }
 }

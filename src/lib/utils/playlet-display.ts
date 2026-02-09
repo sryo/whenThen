@@ -1,7 +1,8 @@
 // Shared playlet rendering helpers used by PlayletsView.
-import type { Action, Playlet, DelayUnit } from "$lib/types/playlet";
-import { getActionDef, getActionLabel } from "$lib/services/action-registry";
+import type { Action, Playlet, DelayUnit, PlayAction } from "$lib/types/playlet";
+import { getActionDef } from "$lib/services/action-registry";
 import { devicesState } from "$lib/state/devices.svelte";
+import { t } from "$lib/i18n";
 
 export interface DetailPart {
   text: string;
@@ -12,20 +13,20 @@ export function triggerDetails(playlet: Playlet): DetailPart[] {
   const parts: DetailPart[] = [];
 
   const triggerType = playlet.trigger?.type ?? "torrent_added";
-  if (triggerType === "download_complete") {
-    parts.push({ text: "on complete", color: "var(--color-primary)" });
+  if (triggerType === "torrent_added") {
+    parts.push({ text: t("playlets.onAdded"), color: "var(--color-primary)" });
+  } else if (triggerType === "download_complete") {
+    parts.push({ text: t("playlets.onComplete"), color: "var(--color-primary)" });
   } else if (triggerType === "metadata_received") {
-    parts.push({ text: "on metadata", color: "var(--color-primary)" });
+    parts.push({ text: t("playlets.onMetadata"), color: "var(--color-primary)" });
   } else if (triggerType === "seeding_ratio") {
     const ratio = playlet.trigger.seedingRatio ?? 2.0;
-    parts.push({ text: `at ratio ${ratio}`, color: "var(--color-primary)" });
+    parts.push({ text: t("playlets.atRatio", { ratio: String(ratio) }), color: "var(--color-primary)" });
   } else if (triggerType === "folder_watch") {
-    if (playlet.trigger.watchFolder) {
-      const segments = playlet.trigger.watchFolder.replace(/\/+$/, "").split("/");
-      parts.push({ text: `when ${segments[segments.length - 1] || "folder"}`, color: "var(--color-primary)" });
-    } else {
-      parts.push({ text: "when folder", color: "var(--color-primary)" });
-    }
+    const folder = playlet.trigger.watchFolder
+      ? playlet.trigger.watchFolder.replace(/\/+$/, "").split("/").pop() || "folder"
+      : "folder";
+    parts.push({ text: t("playlets.whenFolder", { folder }), color: "var(--color-primary)" });
   }
 
   const vals = playlet.conditions
@@ -46,10 +47,10 @@ export function triggerDetails(playlet: Playlet): DetailPart[] {
   if (playlet.fileFilter) {
     let text = "";
     switch (playlet.fileFilter.category) {
-      case "all": text = "any"; break;
-      case "video": text = "video"; break;
-      case "audio": text = "audio"; break;
-      case "subtitle": text = "subtitle"; break;
+      case "all": text = t("common.any"); break;
+      case "video": text = t("common.video"); break;
+      case "audio": text = t("common.audio"); break;
+      case "subtitle": text = t("common.subtitle"); break;
       case "custom": {
         const exts = playlet.fileFilter.customExtensions;
         if (exts.length > 0) text = exts.join(", ");
@@ -60,7 +61,7 @@ export function triggerDetails(playlet: Playlet): DetailPart[] {
   }
 
   if (parts.length === 0) {
-    parts.push({ text: "any", color: "var(--color-text-muted)" });
+    parts.push({ text: t("common.any"), color: "var(--color-text-muted)" });
   }
 
   return parts;
@@ -68,44 +69,49 @@ export function triggerDetails(playlet: Playlet): DetailPart[] {
 
 // Build a phrase like "Move to Downloads" or "Cast to Living Room".
 export function actionPhrase(action: Action): string {
-  const def = getActionDef(action.type);
-  const verb = def?.verb ?? action.type;
+  const verb = t(`actions.${action.type}.verb`);
 
   switch (action.type) {
     case "move": {
-      if (!action.destination) return capitalize(verb);
+      if (!action.destination) return verb;
       const parts = action.destination.replace(/\/+$/, "").split("/");
       const folder = parts[parts.length - 1];
-      return folder ? `${capitalize(verb)} to ${folder}` : capitalize(verb);
+      return folder ? t("actions.phrases.moveTo", { target: folder }) : verb;
     }
-    case "play":
-      return action.app ? `${capitalize(verb)} in ${action.app}` : capitalize(verb);
+    case "play": {
+      const play = action as PlayAction;
+      const target = play.app || t("common.default");
+      if (play.usePlaylist) {
+        return t("actions.phrases.playPlaylistIn", { target });
+      }
+      return t("actions.phrases.playIn", { target });
+    }
     case "cast": {
-      if (!action.deviceId) return capitalize(verb);
+      if (!action.deviceId) return verb;
       const dev = devicesState.devices.find((d) => d.id === action.deviceId);
-      return dev?.name ? `${capitalize(verb)} to ${dev.name}` : capitalize(verb);
+      return dev?.name ? t("actions.phrases.castTo", { target: dev.name }) : verb;
     }
     case "subtitle":
       return action.languages.length > 0
-        ? `Subtitle in ${action.languages.join(", ")}`
-        : "Subtitle";
+        ? t("actions.phrases.subtitleIn", { target: action.languages.join(", ") })
+        : verb;
     case "delay": {
-      const unitLabels: Record<DelayUnit, string> = {
-        seconds: "sec", minutes: "min", days: "days", weeks: "weeks", months: "months",
-      };
-      const u = action.delayUnit ?? "seconds";
-      return `${capitalize(verb)} ${action.seconds} ${unitLabels[u]}`;
+      const unitKey = `actions.delay${capitalize(action.delayUnit ?? "seconds")}`;
+      const unit = t(unitKey);
+      return t("actions.phrases.delayFor", { seconds: action.seconds, unit });
     }
     case "automation":
-      return action.method ? `${capitalize(verb)} (${action.method})` : capitalize(verb);
+      return action.method ? t("actions.phrases.automationWith", { method: action.method }) : verb;
     case "notify":
-      return "Notify";
+      return verb;
     case "webhook":
-      return action.url ? "Webhook" : "Webhook";
+      return verb;
     case "delete_source":
-      return action.deleteFiles ? "Delete with files" : "Delete torrent";
+      return action.deleteFiles
+        ? t("actions.phrases.deleteWithFiles")
+        : t("actions.phrases.deleteTorrentOnly");
     default:
-      return capitalize(verb);
+      return verb;
   }
 }
 
@@ -126,4 +132,10 @@ export function buildActionPhrases(playlet: Playlet): ActionPhrase[] {
       color: def?.color ?? "var(--color-text-muted)",
     };
   });
+}
+
+// Build verb-only summary like "Cast & Move & Notify"
+export function buildActionSummary(playlet: Playlet): string {
+  if (playlet.actions.length === 0) return "";
+  return playlet.actions.map((a) => getActionDef(a.type)?.verb ?? a.type).join(" & ");
 }

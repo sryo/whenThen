@@ -24,6 +24,7 @@ export interface AppSettings {
   default_move_destination: string;
   rss_check_interval_minutes: number;
   locale: string;
+  metadata_timeout_secs: number;
 }
 
 export type ThemeMode = "light" | "dark" | "system";
@@ -54,4 +55,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   default_move_destination: "",
   rss_check_interval_minutes: 15,
   locale: "system",
+  metadata_timeout_secs: 30,
 };

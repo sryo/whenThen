@@ -21,8 +21,27 @@ fn speed_limit(bps: u64) -> Option<NonZeroU32> {
     if bps == 0 { None } else { NonZeroU32::new(bps as u32) }
 }
 
+pub fn expand_path(path: &str) -> PathBuf {
+    if path.starts_with("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(&path[2..]);
+        }
+    } else if path == "~" {
+        if let Some(home) = dirs::home_dir() {
+            return home;
+        }
+    }
+    PathBuf::from(path)
+}
+
 pub async fn init_session(config: &AppConfig, persistence_dir: PathBuf) -> Result<Arc<Session>> {
-    let output_dir = PathBuf::from(&config.download_directory);
+    let output_dir = if config.download_directory.is_empty() {
+        dirs::download_dir().unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join("Downloads"))
+    } else {
+        expand_path(&config.download_directory)
+    };
+    let output_dir_display = output_dir.display().to_string();
+
     if !output_dir.exists() {
         std::fs::create_dir_all(&output_dir)
             .map_err(|e| WhenThenError::Config(format!("Cannot create download dir: {e}")))?;
@@ -59,12 +78,12 @@ pub async fn init_session(config: &AppConfig, persistence_dir: PathBuf) -> Resul
 
     info!(
         "Torrent session initialized — download dir: {}, persistence: {}, listen port: {}..{}, UPnP: {}",
-        config.download_directory, persistence_dir.display(), port, port + 20, config.enable_upnp
+        output_dir_display, persistence_dir.display(), port, port + 20, config.enable_upnp
     );
     Ok(session)
 }
 
-/// Apply speed limits to a running session. Safe to call at any time.
+/// Safe to call on a running session.
 pub fn apply_speed_limits(session: &Session, download_bps: u64, upload_bps: u64) {
     session.ratelimits.set_download_bps(speed_limit(download_bps));
     session.ratelimits.set_upload_bps(speed_limit(upload_bps));
@@ -83,6 +102,11 @@ pub async fn sync_restored_torrents(
         }
     };
 
+    let download_dir = {
+        let cfg = state.config.read().await;
+        expand_path(&cfg.download_directory)
+    };
+
     let torrent_list: Vec<_> = session.with_torrents(|torrents| {
         torrents.map(|(id, h)| (id, h.clone())).collect::<Vec<_>>()
     });
@@ -91,13 +115,24 @@ pub async fn sync_restored_torrents(
 
     for (id, handle) in torrent_list {
         let name = handle.name().unwrap_or_else(|| "Unknown".to_string());
+        let stats = handle.stats();
+
+        // Remove completed torrents whose files were deleted externally.
+        if stats.finished {
+            let output_path = download_dir.join(&name);
+            if !output_path.exists() {
+                info!(torrent_id = id, name = %name, "Removing completed torrent (files moved/deleted)");
+                let _ = session
+                    .delete(librqbit::api::TorrentIdOrHash::Id(id), false)
+                    .await;
+                continue;
+            }
+        }
 
         {
             let mut names = state.torrent_names.write().await;
             names.entry(id).or_insert_with(|| name.clone());
         }
-
-        let stats = handle.stats();
 
         let state_val = if stats.finished {
             TorrentState::Completed
@@ -152,15 +187,12 @@ pub async fn sync_restored_torrents(
     Ok(summaries)
 }
 
-/// Check if there's enough disk space in the download directory.
 fn check_disk_space(download_dir: &str) -> Result<()> {
     let path = std::path::Path::new(download_dir);
     if !path.exists() {
         return Ok(()); // Will be created later; skip check
     }
-    // Use fs2 or std available_space when stable. For now, best-effort via statvfs on unix.
-    // Best-effort space check. The standard library doesn't expose statvfs
-    // directly; rely on the OS error when writes actually fail.
+    // TODO: check available space when std::fs::available_space stabilizes
     let _ = path;
     Ok(())
 }
@@ -184,12 +216,13 @@ pub async fn add_magnet(
         if cfg.incomplete_directory.is_empty() {
             None
         } else {
-            Some(cfg.incomplete_directory.clone())
+            Some(expand_path(&cfg.incomplete_directory).to_string_lossy().to_string())
         }
     };
 
     let (output_folder, only_files) = if let Some(ref opts) = options {
-        (opts.output_folder.clone(), opts.only_files.clone())
+        let folder = opts.output_folder.as_ref().map(|p| expand_path(p).to_string_lossy().to_string());
+        (folder, opts.only_files.clone())
     } else {
         (None, None)
     };
@@ -266,11 +299,16 @@ pub async fn add_torrent_file(
 
     let incomplete_dir = {
         let cfg = state.config.read().await;
-        if cfg.incomplete_directory.is_empty() { None } else { Some(cfg.incomplete_directory.clone()) }
+        if cfg.incomplete_directory.is_empty() {
+            None
+        } else {
+            Some(expand_path(&cfg.incomplete_directory).to_string_lossy().to_string())
+        }
     };
 
     let (output_folder, only_files) = if let Some(ref opts) = options {
-        (opts.output_folder.clone(), opts.only_files.clone())
+        let folder = opts.output_folder.as_ref().map(|p| expand_path(p).to_string_lossy().to_string());
+        (folder, opts.only_files.clone())
     } else {
         (None, None)
     };
@@ -326,7 +364,6 @@ pub async fn add_torrent_file(
         info!(id, "Torrent already managed, skipping torrent:added event");
     }
 
-    // Delete source .torrent file if configured
     let should_delete = state.config.read().await.delete_torrent_file_on_add;
     if should_delete {
         let _ = std::fs::remove_file(&path);
@@ -351,11 +388,16 @@ pub async fn add_torrent_bytes(
     let incomplete_dir = {
         let cfg = state.config.read().await;
         let _ = check_disk_space(&cfg.download_directory);
-        if cfg.incomplete_directory.is_empty() { None } else { Some(cfg.incomplete_directory.clone()) }
+        if cfg.incomplete_directory.is_empty() {
+            None
+        } else {
+            Some(expand_path(&cfg.incomplete_directory).to_string_lossy().to_string())
+        }
     };
 
     let (output_folder, only_files) = if let Some(ref opts) = options {
-        (opts.output_folder.clone(), opts.only_files.clone())
+        let folder = opts.output_folder.as_ref().map(|p| expand_path(p).to_string_lossy().to_string());
+        (folder, opts.only_files.clone())
     } else {
         (None, None)
     };
@@ -602,7 +644,7 @@ pub async fn resume_torrent(state: &AppState, id: usize) -> Result<()> {
     Ok(())
 }
 
-/// Delete + re-add a torrent to force piece re-verification.
+/// Forces piece re-verification via delete + re-add.
 pub async fn recheck_torrent(
     state: &AppState,
     app_handle: &AppHandle,
@@ -619,7 +661,6 @@ pub async fn recheck_torrent(
         .get(librqbit::api::TorrentIdOrHash::Id(id))
         .ok_or(WhenThenError::TorrentNotFound(id))?;
 
-    // Capture torrent bytes and metadata before deleting
     let torrent_bytes = handle
         .with_metadata(|m| m.torrent_bytes.clone())
         .map_err(|e| WhenThenError::Torrent(format!("Cannot read torrent metadata: {e}")))?;
@@ -836,13 +877,23 @@ fn spawn_progress_emitter(state: &AppState, app_handle: AppHandle, torrent_id: u
                 download_speed: u64,
                 upload_speed: u64,
                 peers_connected: usize,
+                queued_peers: usize,
+                connecting_peers: usize,
                 downloaded_bytes: u64,
                 uploaded_bytes: u64,
                 total_bytes: u64,
                 state: TorrentState,
             }
 
-            let uploaded_bytes: u64 = 0; // TODO: populate when librqbit exposes uploaded bytes
+            let (uploaded_bytes, queued_peers, connecting_peers) = if let Some(ref live) = stats.live {
+                (
+                    live.snapshot.uploaded_bytes,
+                    live.snapshot.peer_stats.queued,
+                    live.snapshot.peer_stats.connecting,
+                )
+            } else {
+                (0, 0, 0)
+            };
 
             let progress_event = TorrentProgress {
                 id: torrent_id,
@@ -850,6 +901,8 @@ fn spawn_progress_emitter(state: &AppState, app_handle: AppHandle, torrent_id: u
                 download_speed: dl_speed,
                 upload_speed: ul_speed,
                 peers_connected: peers,
+                queued_peers,
+                connecting_peers,
                 downloaded_bytes: downloaded,
                 uploaded_bytes,
                 total_bytes,
@@ -863,14 +916,13 @@ fn spawn_progress_emitter(state: &AppState, app_handle: AppHandle, torrent_id: u
             if state_val == TorrentState::Completed {
                 info!(torrent_id, "Download complete");
 
-                // Move files from incomplete dir to download dir if configured
                 let cfg = config.read().await;
                 if !cfg.incomplete_directory.is_empty()
                     && cfg.incomplete_directory != cfg.download_directory
                 {
                     let name = handle.name().unwrap_or_else(|| "Unknown".to_string());
-                    let src = PathBuf::from(&cfg.incomplete_directory).join(&name);
-                    let dst = PathBuf::from(&cfg.download_directory).join(&name);
+                    let src = expand_path(&cfg.incomplete_directory).join(&name);
+                    let dst = expand_path(&cfg.download_directory).join(&name);
                     drop(cfg);
 
                     if src.exists() {
@@ -911,17 +963,16 @@ pub async fn move_torrent_files(state: &AppState, torrent_id: usize, destination
         .get(librqbit::api::TorrentIdOrHash::Id(torrent_id))
         .ok_or(WhenThenError::TorrentNotFound(torrent_id))?;
 
-    let dest_path = std::path::PathBuf::from(&destination);
+    let dest_path = expand_path(&destination);
     if !dest_path.exists() {
         std::fs::create_dir_all(&dest_path)
             .map_err(|e| WhenThenError::Internal(format!("Cannot create destination: {e}")))?;
     }
 
-    let download_dir = {
+    let output_folder = {
         let cfg = state.config.read().await;
-        cfg.download_directory.clone()
+        expand_path(&cfg.download_directory)
     };
-    let output_folder = PathBuf::from(&download_dir);
     let torrent_name = handle.name().unwrap_or_else(|| "Unknown".to_string());
     let source_path = output_folder.join(&torrent_name);
 
@@ -939,7 +990,36 @@ pub async fn move_torrent_files(state: &AppState, torrent_id: usize, destination
             })?;
         }
     } else {
-        return Err(WhenThenError::FileNotFound(format!("Torrent files not found at: {}", source_path.display())));
+        // Single-file torrents are placed directly in output folder.
+        let file_info: Vec<String> = handle.with_metadata(|meta| {
+            meta.info.iter_file_details()
+                .map(|iter| {
+                    iter.map(|fi| fi.filename.to_string().unwrap_or_default()).collect()
+                })
+                .unwrap_or_default()
+        }).unwrap_or_default();
+
+        if file_info.len() == 1 {
+            let single_file = &file_info[0];
+            let alt_source = output_folder.join(single_file);
+            if alt_source.exists() {
+                let file_name = alt_source.file_name().unwrap_or_default();
+                let target = dest_path.join(file_name);
+                std::fs::rename(&alt_source, &target).map_err(|e| {
+                    WhenThenError::Internal(format!("Failed to move file: {e}"))
+                })?;
+            } else {
+                return Err(WhenThenError::FileNotFound(format!(
+                    "Torrent file not found at: {}",
+                    alt_source.display()
+                )));
+            }
+        } else {
+            return Err(WhenThenError::FileNotFound(format!(
+                "Torrent files not found at: {}",
+                source_path.display()
+            )));
+        }
     }
 
     Ok(())
@@ -957,11 +1037,10 @@ pub async fn rename_torrent_files(state: &AppState, torrent_id: usize, renames: 
         .get(librqbit::api::TorrentIdOrHash::Id(torrent_id))
         .ok_or(WhenThenError::TorrentNotFound(torrent_id))?;
 
-    let download_dir = {
+    let output_folder = {
         let cfg = state.config.read().await;
-        cfg.download_directory.clone()
+        expand_path(&cfg.download_directory)
     };
-    let output_folder = PathBuf::from(&download_dir);
     let torrent_name = handle.name().unwrap_or_else(|| "Unknown".to_string());
 
     for (file_idx, new_name) in &renames {
@@ -1000,7 +1079,7 @@ pub async fn rename_torrent_files(state: &AppState, torrent_id: usize, renames: 
     Ok(())
 }
 
-/// Delete + re-add a torrent with a new file selection.
+/// Requires delete + re-add to change file selection.
 pub async fn update_torrent_files(
     state: &AppState,
     app_handle: &AppHandle,

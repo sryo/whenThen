@@ -7,3 +7,6 @@ pub mod opensub_client;
 pub mod subtitle_search;
 pub mod folder_watcher;
 pub mod rss;
+pub mod media_info;
+pub mod subtitle_scorer;
+pub mod scraper;

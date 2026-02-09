@@ -1,6 +1,6 @@
 <!-- RSS matches awaiting approval and active downloads. -->
 <script lang="ts">
-  import { Pause, Play, X, ThumbsUp, ThumbsDown, AlertTriangle, Film, FileText, Loader2, ChevronDown, ChevronUp, RefreshCw, Trash2, Cast, Ban, Search, Workflow, FolderOpen, Check, ListPlus } from "lucide-svelte";
+  import { Pause, Play, X, ThumbsUp, ThumbsDown, AlertTriangle, Film, FileText, Loader2, ChevronDown, ChevronUp, RefreshCw, Trash2, Cast, Ban, Search, Workflow, FolderOpen, Check, ListPlus, Link } from "lucide-svelte";
   import ContextMenu from "$lib/components/common/ContextMenu.svelte";
   import CastPopover from "$lib/components/common/CastPopover.svelte";
   import TaskHistoryRow from "$lib/components/common/TaskHistoryRow.svelte";
@@ -14,30 +14,29 @@
   import { playbackState } from "$lib/state/playback.svelte";
   import { queueState } from "$lib/state/queue.svelte";
   import { devicesState } from "$lib/state/devices.svelte";
-  import { torrentPause, torrentResume, torrentDelete, torrentRecheck, torrentFiles, runShellCommand } from "$lib/services/tauri-commands";
+  import { torrentPause, torrentResume, torrentDelete, torrentRecheck, torrentFiles, runShellCommand, getPlaylistUrl } from "$lib/services/tauri-commands";
   import { tasksState } from "$lib/state/tasks.svelte";
   import { i18n } from "$lib/i18n/state.svelte";
   import { open as openShell } from "@tauri-apps/plugin-shell";
-  import { buildActionPhrases } from "$lib/utils/playlet-display";
+  import { buildActionSummary } from "$lib/utils/playlet-display";
 
   let expandedMatchId = $state<string | null>(null);
   let loadingMetadata = $state<string | null>(null);
   let approvingId = $state<string | null>(null);
   let refreshing = $state(false);
   let castPopover = $state<{ torrentId: number; name: string; x: number; y: number } | null>(null);
-  let playletPicker = $state<{ taskId: string; x: number; y: number } | null>(null);
+  let playletPicker = $state<{ taskId: string | null; torrentId: number; torrentName: string; x: number; y: number } | null>(null);
   
   const activeDownloads = $derived(torrentsState.activeTorrents);
   const completedTorrents = $derived(torrentsState.completedTorrents);
   const pendingMatches = $derived(feedsState.pendingMatches);
   const completedTasks = $derived(tasksState.completedTasks);
   const allPlaylets = $derived(playletsState.playlets);
+  const hasFeedsConfigured = $derived(feedsState.sources.length > 0 || feedsState.interests.length > 0);
 
   function getPlayletDisplayName(playlet: typeof playletsState.playlets[0]): string {
     if (playlet.name?.trim()) return playlet.name;
-    // Auto-generate name from actions
-    const phrases = buildActionPhrases(playlet);
-    return phrases.map(p => p.text).join(" & ") || "Playlet";
+    return buildActionSummary(playlet) || "Playlet";
   }
 
   function getTaskForTorrent(torrentId: number) {
@@ -49,24 +48,44 @@
     if (task.playletName) return task.playletName;
     if (task.playletId) {
       const playlet = playletsState.getById(task.playletId);
-      return playlet?.name ?? null;
+      if (!playlet) return null;
+      // Use custom name if set, otherwise show verb summary
+      if (playlet.name?.trim()) return playlet.name;
+      return buildActionSummary(playlet) || null;
     }
     return null;
   }
 
-  function openPlayletPicker(e: MouseEvent, taskId: string) {
+  function openPlayletPicker(e: MouseEvent, torrentId: number, torrentName: string, taskId: string | null) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    playletPicker = { taskId, x: rect.right, y: rect.bottom + 4 };
+    playletPicker = { taskId, torrentId, torrentName, x: rect.right, y: rect.bottom + 4 };
   }
 
   function selectPlaylet(playletId: string) {
-    if (playletPicker) {
+    if (!playletPicker) return;
+
+    if (playletPicker.taskId) {
+      // Reassign existing task
       tasksState.reassignTask(playletPicker.taskId, playletId);
-      playletPicker = null;
+    } else {
+      // Create new task for torrent without one
+      const playlet = playletsState.playlets.find(p => p.id === playletId);
+      if (playlet) {
+        const name = playlet.name || playletsState.derivePlayletName(playlet);
+        tasksState.createTask(
+          playletPicker.torrentId,
+          playletPicker.torrentName,
+          playlet.id,
+          name
+        );
+        uiState.addToast(i18n.t("toast.playletAssigned", { name }), "success");
+      }
     }
+    playletPicker = null;
   }
 
-  function getTaskPlayletId(taskId: string): string | null {
+  function getTaskPlayletId(taskId: string | null): string | null {
+    if (!taskId) return null;
     const task = tasksState.getById(taskId);
     return task?.playletId ?? null;
   }
@@ -98,6 +117,7 @@
 
   const torrentCtx = useContextMenu<{ id: number; state: string }>();
   const completedCtx = useContextMenu<{ id: number; infoHash: string; name: string }>();
+  const historyCtx = useContextMenu<{ id: string }>();
 
   function formatSpeed(bytesPerSecond: number): string {
     if (bytesPerSecond < 1024) return `${bytesPerSecond} B/s`;
@@ -220,6 +240,11 @@
         action: () => addAllToQueue(id),
         disabled: !hasConnectedDevice,
       },
+      {
+        icon: Link,
+        label: i18n.t("common.copyPlaylistUrl"),
+        action: () => copyPlaylistUrl(id),
+      },
       { type: "divider" },
       {
         icon: Ban,
@@ -252,6 +277,16 @@
     );
 
     return items;
+  }
+
+  function historyContextMenuItems(id: string): ContextMenuEntry[] {
+    return [
+      {
+        icon: X,
+        label: i18n.t("common.remove"),
+        action: () => tasksState.removeTask(id),
+      },
+    ];
   }
 
   async function toggleExpand(match: PendingMatch) {
@@ -352,10 +387,21 @@
       console.error("Failed to add to queue:", e);
     }
   }
+
+  async function copyPlaylistUrl(torrentId: number) {
+    try {
+      const url = await getPlaylistUrl(torrentId);
+      await navigator.clipboard.writeText(url);
+      uiState.addToast(i18n.t("common.copiedToClipboard"), "success");
+    } catch (e) {
+      console.error("Failed to copy playlist URL:", e);
+    }
+  }
 </script>
 
 <div class="mx-auto max-w-2xl space-y-6 p-6">
-  <!-- Pending Matches Section -->
+  <!-- Pending Matches Section (only if RSS sources or interests configured) -->
+  {#if hasFeedsConfigured}
   <section>
     <div class="mb-3 flex items-center justify-between">
       <button onclick={() => uiState.toggleSection("pending")} class="flex items-center gap-2">
@@ -522,6 +568,7 @@
       </div>
     </div>
   </section>
+  {/if}
 
   <!-- Downloads Section -->
   <section>
@@ -593,23 +640,22 @@
                 <span class="font-medium">{formatPercent(torrent.progress)}</span>
                 {#if torrent.state !== "paused"}
                   <span>{formatSpeed(torrent.download_speed)}</span>
-                  {#if torrent.peers_connected > 0}
-                    <span>• {torrent.peers_connected} {torrent.peers_connected === 1 ? "peer" : "peers"}</span>
+                  {#if torrent.peers_connected > 0 || torrent.queued_peers > 0 || torrent.connecting_peers > 0}
+                    {@const total = torrent.peers_connected + (torrent.queued_peers ?? 0) + (torrent.connecting_peers ?? 0)}
+                    <span title="{torrent.peers_connected} {i18n.t("common.live")}, {torrent.connecting_peers ?? 0} {i18n.t("common.connecting")}, {torrent.queued_peers ?? 0} {i18n.t("common.queued")}">• {total} {total === 1 ? i18n.t("common.peer") : i18n.t("common.peers")}</span>
                   {/if}
                 {:else}
                   <span class="text-[var(--color-warning)]">{i18n.t("inbox.paused")}</span>
                 {/if}
               </div>
-              {#if task}
-                <button
-                  onclick={(e) => openPlayletPicker(e, task.id)}
-                  class="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"
-                >
-                  <Workflow class="h-3 w-3" />
-                  <span>{playletName ?? i18n.t("common.none")}</span>
-                  <ChevronDown class="h-3 w-3" />
-                </button>
-              {/if}
+              <button
+                onclick={(e) => openPlayletPicker(e, torrent.id, torrent.name, task?.id ?? null)}
+                class="flex items-center gap-1 text-xs {task ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'} hover:underline"
+              >
+                <Workflow class="h-3 w-3" />
+                <span>{playletName ?? i18n.t("inbox.assignPlaylet")}</span>
+                <ChevronDown class="h-3 w-3" />
+              </button>
             </div>
           </div>
         {/each}
@@ -707,7 +753,10 @@
         <div class="expand-content">
           <div class="space-y-2">
             {#each completedTasks as task (task.id)}
-              <TaskHistoryRow {task} />
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div oncontextmenu={(e) => historyCtx.open(e, { id: task.id })}>
+                <TaskHistoryRow {task} />
+              </div>
             {/each}
           </div>
         </div>
@@ -722,6 +771,10 @@
 
 {#if completedCtx.state}
   <ContextMenu x={completedCtx.state.x} y={completedCtx.state.y} items={completedTorrentContextMenuItems(completedCtx.state.data.id, completedCtx.state.data.infoHash, completedCtx.state.data.name)} onclose={completedCtx.close} />
+{/if}
+
+{#if historyCtx.state}
+  <ContextMenu x={historyCtx.state.x} y={historyCtx.state.y} items={historyContextMenuItems(historyCtx.state.data.id)} onclose={historyCtx.close} />
 {/if}
 
 {#if castPopover}

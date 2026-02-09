@@ -3,7 +3,7 @@
   import { Check, X, ChevronDown, ChevronUp, Ban, Settings, ShieldCheck } from "lucide-svelte";
   import type { Task, ActionResult } from "$lib/types/task";
   import { getActionDef } from "$lib/services/action-registry";
-  import { actionPhrase } from "$lib/utils/playlet-display";
+  import { actionPhrase, buildActionSummary } from "$lib/utils/playlet-display";
   import { playletsState } from "$lib/state/playlets.svelte";
   import { uiState } from "$lib/state/ui.svelte";
   import { checkAutomationPermission, openSystemSettings } from "$lib/services/tauri-commands";
@@ -69,13 +69,9 @@
     });
   }
 
-  // Build action summary like "Cast & Move & Notify"
-  function buildActionSummary(): string {
-    if (!playlet || playlet.actions.length === 0) return "";
-    return playlet.actions.map((a) => {
-      const def = getActionDef(a.type);
-      return def?.verb ?? a.type;
-    }).join(" & ");
+  function getActionSummary(): string {
+    if (!playlet) return "";
+    return buildActionSummary(playlet);
   }
 
   // Detect actionable errors/skips and return action info
@@ -136,7 +132,7 @@
       </div>
       <div class="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
         {#if playlet}
-          <span>{buildActionSummary()}</span>
+          <span>{getActionSummary()}</span>
           <span>·</span>
         {/if}
         <span>{formatRelativeTime(task.createdAt)}</span>

@@ -42,18 +42,14 @@
     settingsState.updateAndSave({ [key]: !settingsState.settings[key] });
   }
 
-  function handleNumber(key: "max_download_speed" | "max_upload_speed" | "media_server_port" | "listen_port" | "max_concurrent_tasks" | "picker_countdown_seconds" | "rss_check_interval_minutes", e: Event) {
+  function handleNumber(key: "max_download_speed" | "max_upload_speed" | "media_server_port" | "listen_port" | "max_concurrent_tasks" | "picker_countdown_seconds" | "rss_check_interval_minutes" | "metadata_timeout_secs", e: Event) {
     const value = parseInt((e.target as HTMLInputElement).value) || 0;
     settingsState.updateAndSave({ [key]: value });
   }
 
   const fieldClass = "h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]";
 
-  const appLanguages = [
-    { code: "system", name: "System" },
-    { code: "en", name: "English" },
-    { code: "es", name: "Spanish" },
-  ];
+  const appLanguageCodes = ["system", "en", "es"];
 
   async function handleLocaleChange(e: Event) {
     const value = (e.target as HTMLSelectElement).value;
@@ -61,25 +57,12 @@
     await i18n.setLocale(value);
   }
 
-  const commonLanguages = [
-    { code: "en", name: "English" },
-    { code: "es", name: "Spanish" },
-    { code: "fr", name: "French" },
-    { code: "de", name: "German" },
-    { code: "pt", name: "Portuguese" },
-    { code: "it", name: "Italian" },
-    { code: "ja", name: "Japanese" },
-    { code: "ko", name: "Korean" },
-    { code: "zh", name: "Chinese" },
-    { code: "ar", name: "Arabic" },
-  ];
+  let subtitleLangInput = $state(settingsState.settings.subtitle_languages.join(", "));
 
-  function toggleLanguage(code: string) {
-    const current = settingsState.settings.subtitle_languages;
-    const newLangs = current.includes(code)
-      ? current.filter((c) => c !== code)
-      : [...current, code];
-    settingsState.updateAndSave({ subtitle_languages: newLangs });
+  function handleSubtitleLangChange(value: string) {
+    subtitleLangInput = value;
+    const langs = value.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    settingsState.updateAndSave({ subtitle_languages: langs });
   }
 
   async function addWatchFolder() {
@@ -233,8 +216,8 @@
             value={settingsState.settings.locale}
             onchange={handleLocaleChange}
           >
-            {#each appLanguages as lang}
-              <option value={lang.code}>{lang.name}</option>
+            {#each appLanguageCodes as code}
+              <option value={code}>{i18n.t(`languages.${code}`)}</option>
             {/each}
           </select>
         </div>
@@ -457,17 +440,18 @@
           </div>
         </div>
         <div>
-          <label class="mb-2 block text-sm text-[var(--color-text-secondary)]">{i18n.t("settings.subtitleLanguages")}</label>
-          <div class="flex flex-wrap gap-1.5">
-            {#each commonLanguages as lang}
-              <button
-                onclick={() => toggleLanguage(lang.code)}
-                class="rounded-full px-2.5 py-1 text-xs transition-colors {settingsState.settings.subtitle_languages.includes(lang.code) ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]'}"
-              >
-                {lang.name}
-              </button>
-            {/each}
-          </div>
+          <label for="subtitle-languages" class="mb-2 block text-sm text-[var(--color-text-secondary)]">{i18n.t("settings.subtitleLanguages")}</label>
+          <input
+            id="subtitle-languages"
+            type="text"
+            value={subtitleLangInput}
+            oninput={(e) => handleSubtitleLangChange((e.target as HTMLInputElement).value)}
+            placeholder="en, es, de"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            class={fieldClass}
+          />
         </div>
       </div>
     </div>
@@ -602,6 +586,19 @@
           >
             <span class="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform shadow-sm {settingsState.settings.auto_discover ? 'translate-x-5' : ''}"></span>
           </button>
+        </div>
+        <div>
+          <label for="metadata-timeout" class="mb-1 block text-sm text-[var(--color-text-secondary)]">{i18n.t("settings.metadataTimeout")}</label>
+          <input
+            id="metadata-timeout"
+            type="number"
+            min="5"
+            max="120"
+            value={settingsState.settings.metadata_timeout_secs}
+            onchange={(e) => handleNumber("metadata_timeout_secs", e)}
+            class={fieldClass}
+          />
+          <p class="mt-1 text-xs text-[var(--color-text-muted)]">{i18n.t("settings.metadataTimeoutDescription")}</p>
         </div>
       </div>
     </div>

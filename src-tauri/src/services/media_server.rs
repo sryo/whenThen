@@ -64,6 +64,7 @@ impl MediaServerHandle {
 
         let app = Router::new()
             .route("/torrent/{torrent_id}/stream/{file_idx}", get(stream_torrent))
+            .route("/torrent/{torrent_id}/playlist.m3u8", get(serve_playlist))
             .route("/local/{token}", get(serve_local_file))
             .route("/subtitles.vtt", get(serve_subtitles))
             .route("/health", get(health_check))
@@ -414,4 +415,78 @@ async fn serve_subtitles(
         }
         None => (StatusCode::NOT_FOUND, "No subtitles loaded").into_response(),
     }
+}
+
+async fn serve_playlist(
+    Path(torrent_id): Path<usize>,
+    AxumState(state): AxumState<MediaServerState>,
+) -> impl IntoResponse {
+    let session = {
+        let guard = state.torrent_session.read().await;
+        match guard.as_ref() {
+            Some(s) => s.clone(),
+            None => {
+                return (StatusCode::SERVICE_UNAVAILABLE, "Torrent session not ready")
+                    .into_response();
+            }
+        }
+    };
+
+    let handle = match session.get(librqbit::api::TorrentIdOrHash::Id(torrent_id)) {
+        Some(h) => h,
+        None => {
+            return (StatusCode::NOT_FOUND, "Torrent not found").into_response();
+        }
+    };
+
+    let file_details: Vec<(usize, String, u64)> = match handle.with_metadata(|meta| {
+        meta.info.iter_file_details()
+            .map(|iter| {
+                iter.enumerate()
+                    .map(|(idx, fi)| {
+                        let name = fi.filename.to_string()
+                            .unwrap_or_else(|_| "<INVALID NAME>".to_string());
+                        (idx, name, fi.len)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    }) {
+        Ok(details) => details,
+        Err(e) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, format!("Metadata error: {e}"))
+                .into_response();
+        }
+    };
+
+    // Filter to playable files (video/audio)
+    let playable_files: Vec<_> = file_details
+        .into_iter()
+        .filter(|(_, name, _)| {
+            let mime = mime_guess::from_path(name).first_raw();
+            mime.is_some_and(|m| m.starts_with("video/") || m.starts_with("audio/"))
+        })
+        .collect();
+
+    if playable_files.is_empty() {
+        return (StatusCode::NOT_FOUND, "No playable files in torrent").into_response();
+    }
+
+    // Build M3U8 playlist
+    let mut playlist = String::from("#EXTM3U\n");
+    for (idx, name, duration_bytes) in playable_files {
+        // Use -1 for unknown duration
+        let display_name = name.rsplit('/').next().unwrap_or(&name);
+        playlist.push_str(&format!("#EXTINF:-1,{}\n", display_name));
+        playlist.push_str(&format!("/torrent/{}/stream/{}\n", torrent_id, idx));
+        let _ = duration_bytes; // silence unused warning
+    }
+
+    let mut headers = HeaderMap::new();
+    match parse_header("application/x-mpegURL") {
+        Ok(v) => { headers.insert(header::CONTENT_TYPE, v); }
+        Err(s) => return (s, "Header error").into_response(),
+    }
+
+    (StatusCode::OK, headers, playlist).into_response()
 }

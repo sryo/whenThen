@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::errors::{WhenThenError, Result};
 use crate::models::PlaybackStatusResponse;
 use crate::services::media_server::TokenEntry;
-use crate::services::torrent_engine::get_local_ip;
+use crate::services::torrent_engine::{get_local_ip, expand_path};
 use crate::state::AppState;
 
 #[tauri::command]
@@ -260,7 +260,7 @@ pub async fn playback_open_in_app(
         (cfg.download_directory.clone(), relative)
     };
 
-    let full_path = PathBuf::from(&download_dir).join(&relative_path);
+    let full_path = expand_path(&download_dir).join(&relative_path);
     if !full_path.exists() {
         return Err(WhenThenError::FileNotFound(
             full_path.to_string_lossy().to_string(),

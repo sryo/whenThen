@@ -8,11 +8,10 @@ import type {
   ConditionField,
   FileFilter,
   TriggerConfig,
-  DelayUnit,
 } from "$lib/types/playlet";
 import type { TorrentFileInfo } from "$lib/types/torrent";
 import { getActionDef } from "$lib/services/action-registry";
-import { devicesState } from "$lib/state/devices.svelte";
+import { actionPhrase } from "$lib/utils/playlet-display";
 
 let playlets = $state<Playlet[]>([]);
 
@@ -110,42 +109,6 @@ function getSubject(filter: FileFilter | null): string {
       return exts.length > 0 ? `${exts.join(", ")} torrents` : "any torrent";
     }
     default: return "any torrent";
-  }
-}
-
-// Build a phrase like "move to Downloads" or "cast to Living Room".
-// Only appends the target for types where it reads naturally in a title.
-function actionPhrase(action: Action): string {
-  const def = getActionDef(action.type);
-  const verb = def?.verb ?? action.type;
-
-  switch (action.type) {
-    case "move": {
-      if (!action.destination) return verb;
-      const parts = action.destination.replace(/\/+$/, "").split("/");
-      const folder = parts[parts.length - 1];
-      return folder ? `${verb} to ${folder}` : verb;
-    }
-    case "play":
-      return action.app ? `${verb} in ${action.app}` : verb;
-    case "cast": {
-      if (!action.deviceId) return verb;
-      const dev = devicesState.devices.find((d) => d.id === action.deviceId);
-      return dev?.name ? `${verb} to ${dev.name}` : verb;
-    }
-    case "subtitle":
-      return action.languages.length > 0
-        ? `${verb} in ${action.languages.join(", ")}`
-        : verb;
-    case "delay": {
-      const unitLabels: Record<DelayUnit, string> = {
-        seconds: "sec", minutes: "min", days: "days", weeks: "weeks", months: "months",
-      };
-      const u = action.delayUnit ?? "seconds";
-      return `${verb} ${action.seconds} ${unitLabels[u]}`;
-    }
-    default:
-      return verb;
   }
 }
 

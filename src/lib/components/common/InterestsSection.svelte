@@ -1,15 +1,28 @@
 <!-- What section: patterns to watch for. -->
 <script lang="ts">
-  import { Plus, X, ToggleLeft, ToggleRight, Search, HelpCircle, Check } from "lucide-svelte";
+  import { Plus, X, ToggleLeft, ToggleRight, Search, HelpCircle, Check, Folder, Film } from "lucide-svelte";
   import { feedsState, type Interest, type FeedFilter } from "$lib/state/feeds.svelte";
   import { i18n } from "$lib/i18n/state.svelte";
+  import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
   const placeholders: Record<FeedFilter["type"], string> = {
     must_contain: "linux, 1080p, S01",
     must_not_contain: "CAM, HDTS, TELESYNC",
     regex: "S[0-9]{2}E[0-9]{2}",
     size_range: "100-5000",
+    wildcard: "*1080p*HEVC*",
   };
+
+  async function pickDownloadPath(interest: Interest) {
+    const dir = await openDialog({ directory: true, multiple: false });
+    if (dir) {
+      updateInterest(interest.id, { downloadPath: dir as string });
+    }
+  }
+
+  function clearDownloadPath(interest: Interest) {
+    updateInterest(interest.id, { downloadPath: undefined });
+  }
 
   let savedRecently = $state(false);
   let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -147,8 +160,8 @@
                   onchange={(e) => updateInterest(interest.id, { filterLogic: (e.target as HTMLSelectElement).value as "and" | "or" })}
                   class="w-14 h-7 shrink-0 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-1 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-warning)]"
                 >
-                  <option value="and">and</option>
-                  <option value="or">or</option>
+                  <option value="and">{i18n.t("common.and")}</option>
+                  <option value="or">{i18n.t("common.or")}</option>
                 </select>
               {/if}
 
@@ -160,6 +173,7 @@
                 <option value="must_contain">{i18n.t("interests.contains")}</option>
                 <option value="must_not_contain">{i18n.t("interests.excludes")}</option>
                 <option value="regex">{i18n.t("interests.matches")}</option>
+                <option value="wildcard">{i18n.t("interests.wildcard")}</option>
                 <option value="size_range">{i18n.t("interests.sizeMb")}</option>
               </select>
 
@@ -191,6 +205,48 @@
             <Plus class="h-3.5 w-3.5" />
             {i18n.t("interests.addRule")}
           </button>
+
+          <!-- Options: download path and smart episode filter -->
+          <div class="mt-2 pt-2 border-t border-[var(--color-warning)]/20 space-y-2">
+            <!-- Download path -->
+            <div class="flex items-center gap-2">
+              <Folder class="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
+              <span class="text-xs text-[var(--color-text-muted)] shrink-0">{i18n.t("interests.downloadPath")}</span>
+              {#if interest.downloadPath}
+                <span class="min-w-0 flex-1 truncate text-xs text-[var(--color-text-secondary)]">{interest.downloadPath}</span>
+                <button
+                  onclick={() => clearDownloadPath(interest)}
+                  class="shrink-0 rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-error)]"
+                >
+                  <X class="h-3 w-3" />
+                </button>
+              {:else}
+                <span class="text-xs text-[var(--color-text-muted)] italic">{i18n.t("interests.useDefault")}</span>
+              {/if}
+              <button
+                onclick={() => pickDownloadPath(interest)}
+                class="shrink-0 rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
+              >
+                <Folder class="h-3 w-3" />
+              </button>
+            </div>
+
+            <!-- Smart episode filter -->
+            <div class="flex items-center gap-2">
+              <Film class="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
+              <span class="text-xs text-[var(--color-text-muted)] flex-1">{i18n.t("interests.smartEpisodeFilter")}</span>
+              <button
+                onclick={() => updateInterest(interest.id, { smartEpisodeFilter: !interest.smartEpisodeFilter })}
+                class="shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              >
+                {#if interest.smartEpisodeFilter}
+                  <ToggleRight class="h-4 w-4 text-[var(--color-success)]" />
+                {:else}
+                  <ToggleLeft class="h-4 w-4" />
+                {/if}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     {/each}

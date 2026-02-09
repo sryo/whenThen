@@ -34,6 +34,111 @@ fn build_search_url(url_template: &str, interest: &Interest) -> String {
     url_template.replace("{search}", &encoded)
 }
 
+/// Calculate backoff duration based on failure count.
+/// 1 failure = 1 min, 2 = 2 min, 3 = 4 min, 4 = 8 min, 5 = 16 min, 6+ = 30 min
+fn calculate_backoff(failure_count: u32) -> Duration {
+    let mins = (1u64 << failure_count.saturating_sub(1).min(5)).min(30);
+    Duration::from_secs(mins * 60)
+}
+
+/// Check if source is in backoff period.
+fn is_in_backoff(source: &Source) -> bool {
+    if let Some(retry_after) = &source.retry_after {
+        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(retry_after) {
+            return Utc::now() < dt.with_timezone(&Utc);
+        }
+    }
+    false
+}
+
+/// Extract episode identifier from title (S01E01, 1x01, or daily format).
+fn extract_episode_id(title: &str) -> Option<String> {
+    // S01E01, S1E1 pattern
+    let season_ep = Regex::new(r"(?i)S(\d{1,2})E(\d{1,2})").ok()?;
+    if let Some(caps) = season_ep.captures(title) {
+        let season: u32 = caps.get(1)?.as_str().parse().ok()?;
+        let episode: u32 = caps.get(2)?.as_str().parse().ok()?;
+        return Some(format!("S{:02}E{:02}", season, episode));
+    }
+
+    // 1x01, 01x01 pattern
+    let x_pattern = Regex::new(r"(?i)(\d{1,2})x(\d{2})").ok()?;
+    if let Some(caps) = x_pattern.captures(title) {
+        let season: u32 = caps.get(1)?.as_str().parse().ok()?;
+        let episode: u32 = caps.get(2)?.as_str().parse().ok()?;
+        return Some(format!("S{:02}E{:02}", season, episode));
+    }
+
+    // Daily format: 2024.01.15 or 2024-01-15
+    let daily = Regex::new(r"(\d{4})[.\-](\d{2})[.\-](\d{2})").ok()?;
+    if let Some(caps) = daily.captures(title) {
+        let year = caps.get(1)?.as_str();
+        let month = caps.get(2)?.as_str();
+        let day = caps.get(3)?.as_str();
+        return Some(format!("{}-{}-{}", year, month, day));
+    }
+
+    None
+}
+
+/// Check if title contains PROPER or REPACK quality upgrade markers.
+fn is_quality_upgrade(title: &str) -> bool {
+    let lower = title.to_lowercase();
+    lower.contains("proper") || lower.contains("repack") || lower.contains("rerip")
+}
+
+/// Convert wildcard pattern (* and ?) to regex.
+fn wildcard_to_regex(pattern: &str) -> String {
+    let mut result = String::with_capacity(pattern.len() * 2);
+    for c in pattern.chars() {
+        match c {
+            '*' => result.push_str(".*"),
+            '?' => result.push('.'),
+            '.' | '+' | '^' | '$' | '(' | ')' | '[' | ']' | '{' | '}' | '|' | '\\' => {
+                result.push('\\');
+                result.push(c);
+            }
+            _ => result.push(c),
+        }
+    }
+    result
+}
+
+/// Cleanup seen items older than max age (60 days).
+async fn maybe_cleanup_seen_items(rss_state: &RssState) {
+    const CLEANUP_INTERVAL_SECS: u64 = 3600; // 1 hour
+    const MAX_AGE_SECS: i64 = 60 * 24 * 60 * 60; // 60 days
+
+    let should_cleanup = {
+        let last = rss_state.last_cleanup.lock().await;
+        last.elapsed().as_secs() >= CLEANUP_INTERVAL_SECS
+    };
+
+    if !should_cleanup {
+        return;
+    }
+
+    let now = Utc::now();
+    let mut seen = rss_state.seen_items.lock().await;
+    let before_count = seen.len();
+
+    seen.retain(|_, timestamp| {
+        chrono::DateTime::parse_from_rfc3339(timestamp)
+            .map(|t| (now - t.with_timezone(&Utc)).num_seconds() < MAX_AGE_SECS)
+            .unwrap_or(false)
+    });
+
+    if seen.len() < before_count {
+        info!(
+            "Cleaned up {} stale seen items",
+            before_count - seen.len()
+        );
+    }
+
+    drop(seen);
+    *rss_state.last_cleanup.lock().await = std::time::Instant::now();
+}
+
 pub struct RssServiceHandle {
     shutdown_tx: tokio::sync::oneshot::Sender<()>,
 }
@@ -54,6 +159,10 @@ pub struct RssState {
     pub bad_items: Arc<RwLock<HashMap<String, BadItem>>>,
     pub pending_matches: Arc<RwLock<Vec<PendingMatch>>>,
     pub service_handle: Arc<Mutex<Option<RssServiceHandle>>>,
+    /// Seen episodes per interest: interest_id -> set of episode identifiers
+    pub seen_episodes: Arc<Mutex<HashMap<String, std::collections::HashSet<String>>>>,
+    /// Last cleanup timestamp for periodic maintenance
+    pub last_cleanup: Arc<Mutex<std::time::Instant>>,
 }
 
 impl RssState {
@@ -65,6 +174,8 @@ impl RssState {
             bad_items: Arc::new(RwLock::new(HashMap::new())),
             pending_matches: Arc::new(RwLock::new(Vec::new())),
             service_handle: Arc::new(Mutex::new(None)),
+            seen_episodes: Arc::new(Mutex::new(HashMap::new())),
+            last_cleanup: Arc::new(Mutex::new(std::time::Instant::now())),
         }
     }
 }
@@ -83,17 +194,82 @@ fn extract_magnet_from_text(text: &str) -> Option<String> {
     None
 }
 
-/// Fetch and parse an RSS feed from URL.
+/// Result of fetching a feed with caching headers.
+pub struct FetchFeedResult {
+    pub items: Vec<ParsedFeedItem>,
+    pub etag: Option<String>,
+    pub last_modified: Option<String>,
+    pub not_modified: bool,
+}
+
+/// Fetch and parse an RSS feed from URL with optional conditional headers.
+pub async fn fetch_feed_with_cache(
+    url: &str,
+    etag: Option<&str>,
+    last_modified: Option<&str>,
+) -> Result<FetchFeedResult> {
+    let client = reqwest::Client::new();
+    let mut request = client.get(url);
+
+    if let Some(etag) = etag {
+        request = request.header("If-None-Match", etag);
+    }
+    if let Some(lm) = last_modified {
+        request = request.header("If-Modified-Since", lm);
+    }
+
+    let response = request.send().await?;
+
+    // 304 Not Modified
+    if response.status() == reqwest::StatusCode::NOT_MODIFIED {
+        return Ok(FetchFeedResult {
+            items: Vec::new(),
+            etag: None,
+            last_modified: None,
+            not_modified: true,
+        });
+    }
+
+    let new_etag = response
+        .headers()
+        .get("ETag")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
+    let new_last_modified = response
+        .headers()
+        .get("Last-Modified")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
+
+    let bytes = response.bytes().await?;
+    let feed = feed_rs::parser::parse(&bytes[..])?;
+
+    let items = parse_feed_entries(feed);
+
+    Ok(FetchFeedResult {
+        items,
+        etag: new_etag,
+        last_modified: new_last_modified,
+        not_modified: false,
+    })
+}
+
+/// Fetch and parse an RSS feed from URL (simple version without caching).
 pub async fn fetch_feed(url: &str) -> Result<Vec<ParsedFeedItem>> {
     let response = reqwest::get(url).await?;
     let bytes = response.bytes().await?;
     let feed = feed_rs::parser::parse(&bytes[..])?;
+    Ok(parse_feed_entries(feed))
+}
 
-    let items: Vec<ParsedFeedItem> = feed
-        .entries
+/// Parse feed entries into ParsedFeedItem structs.
+fn parse_feed_entries(feed: feed_rs::model::Feed) -> Vec<ParsedFeedItem> {
+    feed.entries
         .into_iter()
         .map(|entry| {
             let id = entry.id.clone();
+            // Extract GUID - some feeds use a dedicated guid field in extensions
+            let guid = id.clone();
             let title = entry.title.map(|t| t.content).unwrap_or_default();
 
             // Look for magnet URI in links or content
@@ -172,6 +348,7 @@ pub async fn fetch_feed(url: &str) -> Result<Vec<ParsedFeedItem>> {
 
             ParsedFeedItem {
                 id,
+                guid,
                 title,
                 magnet_uri,
                 torrent_url,
@@ -179,14 +356,14 @@ pub async fn fetch_feed(url: &str) -> Result<Vec<ParsedFeedItem>> {
                 published_date: published,
             }
         })
-        .collect();
-
-    Ok(items)
+        .collect()
 }
 
 #[derive(Debug, Clone)]
 pub struct ParsedFeedItem {
     pub id: String,
+    /// Feed GUID if available, otherwise same as id.
+    pub guid: String,
     pub title: String,
     pub magnet_uri: Option<String>,
     pub torrent_url: Option<String>,
@@ -228,6 +405,12 @@ fn evaluate_single_filter(item: &ParsedFeedItem, filter: &FeedFilter) -> bool {
         FilterType::Regex => Regex::new(&filter.value)
             .map(|re| re.is_match(&item.title))
             .unwrap_or(false),
+        FilterType::Wildcard => {
+            let pattern = wildcard_to_regex(&filter.value.to_lowercase());
+            Regex::new(&format!("(?i){}", pattern))
+                .map(|re| re.is_match(&item.title))
+                .unwrap_or(false)
+        }
         FilterType::SizeRange => {
             if let Some(size) = item.size {
                 let parts: Vec<&str> = filter.value.split('-').collect();
@@ -288,6 +471,7 @@ pub fn evaluate_filters_with_logic(
                 FilterType::MustContain => Some(format!("contains \"{}\"", f.value)),
                 FilterType::MustNotContain => Some(format!("excludes \"{}\"", f.value)),
                 FilterType::Regex => Some(format!("regex /{}/", f.value)),
+                FilterType::Wildcard => Some(format!("wildcard \"{}\"", f.value)),
                 FilterType::SizeRange => Some(format!("size {}", f.value)),
             }
         })
@@ -330,7 +514,7 @@ pub fn start_service(app_handle: AppHandle, rss_state: Arc<RssState>) -> RssServ
     let handle = app_handle.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(60));
-        let mut last_check = std::time::Instant::now() - Duration::from_secs(3600); // Check immediately on startup
+        let mut last_global_check = std::time::Instant::now() - Duration::from_secs(3600); // Check immediately on startup
 
         loop {
             tokio::select! {
@@ -339,16 +523,20 @@ pub fn start_service(app_handle: AppHandle, rss_state: Arc<RssState>) -> RssServ
                     break;
                 }
                 _ = interval.tick() => {
-                    // Get check interval from settings
                     let state = handle.state::<crate::state::AppState>();
-                    let interval_mins = state.config.read().await.rss_check_interval_minutes;
-                    let interval_secs = (interval_mins as u64) * 60;
 
-                    let now = std::time::Instant::now();
-                    if now.duration_since(last_check).as_secs() < interval_secs {
-                        continue;
-                    }
-                    last_check = now;
+                    // Periodic cleanup of old seen items
+                    maybe_cleanup_seen_items(&rss_state).await;
+
+                    // Get global check interval from settings
+                    let global_interval_mins = state.config.read().await.rss_check_interval_minutes;
+                    let global_interval_secs = (global_interval_mins as u64) * 60;
+
+                    let now_instant = std::time::Instant::now();
+                    let now_utc = Utc::now();
+
+                    // Check if global interval has passed
+                    let global_check_due = now_instant.duration_since(last_global_check).as_secs() >= global_interval_secs;
 
                     let sources = rss_state.sources.read().await.clone();
                     let interests = rss_state.interests.read().await.clone();
@@ -359,31 +547,204 @@ pub fn start_service(app_handle: AppHandle, rss_state: Arc<RssState>) -> RssServ
                         continue;
                     }
 
-                    for source in sources {
+                    let mut sources_to_update: Vec<Source> = Vec::new();
+
+                    for mut source in sources {
                         if !source.enabled {
                             continue;
                         }
 
-                        match check_source_for_matches(&handle, &rss_state, &source, &enabled_interests).await {
-                            Ok(count) => {
+                        // Check if source is in backoff
+                        if is_in_backoff(&source) {
+                            continue;
+                        }
+
+                        // Determine if this source should be checked
+                        let should_check = if let Some(next_check) = &source.next_check_at {
+                            chrono::DateTime::parse_from_rfc3339(next_check)
+                                .map(|dt| now_utc >= dt.with_timezone(&Utc))
+                                .unwrap_or(true)
+                        } else {
+                            global_check_due
+                        };
+
+                        if !should_check {
+                            continue;
+                        }
+
+                        match check_source_for_matches_with_cache(&handle, &rss_state, &source, &enabled_interests).await {
+                            Ok((count, new_etag, new_last_modified)) => {
                                 if count > 0 {
                                     info!("Source {} queued {} new items for screening", source.name, count);
+                                }
+                                // Reset failure count on success
+                                source.failure_count = 0;
+                                source.retry_after = None;
+                                // Update cache headers
+                                if new_etag.is_some() {
+                                    source.etag = new_etag;
+                                }
+                                if new_last_modified.is_some() {
+                                    source.last_modified = new_last_modified;
                                 }
                             }
                             Err(e) => {
                                 warn!("Failed to check source {}: {}", source.name, e);
+                                // Increment failure count and set backoff
+                                source.failure_count = source.failure_count.saturating_add(1);
+                                let backoff = calculate_backoff(source.failure_count);
+                                source.retry_after = Some((now_utc + chrono::Duration::from_std(backoff).unwrap_or_default()).to_rfc3339());
+                                info!("Source {} will retry in {} minutes", source.name, backoff.as_secs() / 60);
+                            }
+                        }
+
+                        // Calculate next check time
+                        let interval_mins = source.check_interval.unwrap_or(global_interval_mins);
+                        source.next_check_at = Some((now_utc + chrono::Duration::minutes(interval_mins as i64)).to_rfc3339());
+                        source.last_checked = Some(now_utc.to_rfc3339());
+                        sources_to_update.push(source);
+                    }
+
+                    // Update sources with new cache headers and timing
+                    if !sources_to_update.is_empty() {
+                        let mut sources_lock = rss_state.sources.write().await;
+                        for updated in sources_to_update {
+                            if let Some(src) = sources_lock.iter_mut().find(|s| s.id == updated.id) {
+                                *src = updated;
                             }
                         }
                     }
 
-                    // Persist seen items after checking all sources
+                    if global_check_due {
+                        last_global_check = now_instant;
+                    }
+
+                    // Persist seen items and sources after checking
                     crate::commands::rss::persist_seen_items(&handle, &state).await;
+                    crate::commands::rss::persist_sources_internal(&handle, &state).await;
                 }
             }
         }
     });
 
     RssServiceHandle { shutdown_tx }
+}
+
+/// Check a source against all interests with HTTP caching support.
+/// Returns (match_count, new_etag, new_last_modified).
+async fn check_source_for_matches_with_cache(
+    app_handle: &AppHandle,
+    rss_state: &RssState,
+    source: &Source,
+    interests: &[&Interest],
+) -> Result<(usize, Option<String>, Option<String>)> {
+    // For search placeholder URLs, we can't use caching (different URL per interest)
+    if has_search_placeholder(&source.url) {
+        let count = check_source_for_matches(app_handle, rss_state, source, interests).await?;
+        return Ok((count, None, None));
+    }
+
+    // Use ETag/Last-Modified caching for standard feeds
+    let result = fetch_feed_with_cache(
+        &source.url,
+        source.etag.as_deref(),
+        source.last_modified.as_deref(),
+    )
+    .await?;
+
+    if result.not_modified {
+        info!("Source {} unchanged (304 Not Modified)", source.name);
+        return Ok((0, None, None));
+    }
+
+    let mut matched_count = 0;
+
+    for item in &result.items {
+        // RACE CONDITION FIX: Build the dedup key based on source settings
+        let item_key = if source.use_guid_dedup {
+            format!("{}:{}", source.id, item.guid)
+        } else {
+            format!("{}:{}", source.id, item.id)
+        };
+
+        // RACE CONDITION FIX: Hold lock across check+insert
+        let mut seen = rss_state.seen_items.lock().await;
+        if seen.contains_key(&item_key) {
+            continue;
+        }
+
+        let now = Utc::now().to_rfc3339();
+        if item.magnet_uri.is_none() && item.torrent_url.is_none() {
+            seen.insert(item_key.clone(), now);
+            continue;
+        }
+
+        // PROPER/REPACK bypasses dedup for quality upgrades
+        let is_upgrade = is_quality_upgrade(&item.title);
+
+        // Check against all interests (first match wins)
+        for interest in interests {
+            let matched =
+                evaluate_filters_with_logic(item, &interest.filters, &interest.filter_logic);
+            if matched.is_none() {
+                continue;
+            }
+
+            // Smart episode filter: check if we've seen this episode for this interest
+            if interest.smart_episode_filter && !is_upgrade {
+                if let Some(episode_id) = extract_episode_id(&item.title) {
+                    let mut seen_eps = rss_state.seen_episodes.lock().await;
+                    let interest_eps = seen_eps.entry(interest.id.clone()).or_default();
+                    if interest_eps.contains(&episode_id) {
+                        info!("Skipping duplicate episode {} for interest {}", episode_id, interest.name);
+                        continue;
+                    }
+                    interest_eps.insert(episode_id);
+                }
+            }
+
+            // Insert to seen BEFORE dropping lock (race condition fix)
+            seen.insert(item_key.clone(), now.clone());
+            drop(seen);
+
+            let pending = PendingMatch {
+                id: uuid::Uuid::new_v4().to_string(),
+                source_id: source.id.clone(),
+                source_name: source.name.clone(),
+                interest_id: interest.id.clone(),
+                interest_name: interest.name.clone(),
+                title: item.title.clone(),
+                magnet_uri: item.magnet_uri.clone(),
+                torrent_url: item.torrent_url.clone(),
+                created_at: Utc::now().to_rfc3339(),
+                metadata: None,
+            };
+
+            rss_state
+                .pending_matches
+                .write()
+                .await
+                .push(pending.clone());
+            matched_count += 1;
+
+            let _ = app_handle.emit(
+                "rss:new-match",
+                serde_json::json!({
+                    "id": pending.id,
+                    "source_name": source.name,
+                    "interest_name": interest.name,
+                    "title": item.title,
+                }),
+            );
+
+            break;
+        }
+    }
+
+    let count = rss_state.pending_matches.read().await.len();
+    let _ = app_handle.emit("rss:pending-count", count);
+
+    Ok((matched_count, result.etag, result.last_modified))
 }
 
 /// Check a source against all interests and queue matches for screening.
@@ -427,18 +788,27 @@ async fn check_source_for_matches(
         let items = fetch_feed(&source.url).await?;
 
         for item in &items {
-            let mut seen = rss_state.seen_items.lock().await;
-            let item_key = format!("{}:{}", source.id, item.id);
+            // Build the dedup key based on source settings
+            let item_key = if source.use_guid_dedup {
+                format!("{}:{}", source.id, item.guid)
+            } else {
+                format!("{}:{}", source.id, item.id)
+            };
 
+            // RACE CONDITION FIX: Hold lock across check+insert
+            let mut seen = rss_state.seen_items.lock().await;
             if seen.contains_key(&item_key) {
                 continue;
             }
 
             let now = Utc::now().to_rfc3339();
             if item.magnet_uri.is_none() && item.torrent_url.is_none() {
-                seen.insert(item_key, now);
+                seen.insert(item_key.clone(), now);
                 continue;
             }
+
+            // PROPER/REPACK bypasses dedup for quality upgrades
+            let is_upgrade = is_quality_upgrade(&item.title);
 
             // Check against all interests (first match wins)
             for interest in interests {
@@ -448,6 +818,20 @@ async fn check_source_for_matches(
                     continue;
                 }
 
+                // Smart episode filter: check if we've seen this episode for this interest
+                if interest.smart_episode_filter && !is_upgrade {
+                    if let Some(episode_id) = extract_episode_id(&item.title) {
+                        let mut seen_eps = rss_state.seen_episodes.lock().await;
+                        let interest_eps = seen_eps.entry(interest.id.clone()).or_default();
+                        if interest_eps.contains(&episode_id) {
+                            info!("Skipping duplicate episode {} for interest {}", episode_id, interest.name);
+                            continue;
+                        }
+                        interest_eps.insert(episode_id);
+                    }
+                }
+
+                // Insert to seen BEFORE dropping lock (race condition fix)
                 seen.insert(item_key.clone(), now.clone());
                 drop(seen);
 
@@ -504,15 +888,16 @@ async fn process_items_for_interest(
     let mut matched_count = 0;
 
     for item in items {
-        let mut seen = rss_state.seen_items.lock().await;
-
-        // Use interest-specific key for placeholder mode (same item can match different searches)
+        // Build the dedup key, optionally using GUID
+        let base_id = if source.use_guid_dedup { &item.guid } else { &item.id };
         let item_key = if use_interest_key {
-            format!("{}:{}:{}", source.id, interest.id, item.id)
+            format!("{}:{}:{}", source.id, interest.id, base_id)
         } else {
-            format!("{}:{}", source.id, item.id)
+            format!("{}:{}", source.id, base_id)
         };
 
+        // RACE CONDITION FIX: Hold lock across check+insert
+        let mut seen = rss_state.seen_items.lock().await;
         if seen.contains_key(&item_key) {
             continue;
         }
@@ -530,6 +915,24 @@ async fn process_items_for_interest(
             continue;
         }
 
+        // PROPER/REPACK bypasses dedup for quality upgrades
+        let is_upgrade = is_quality_upgrade(&item.title);
+
+        // Smart episode filter: check if we've seen this episode for this interest
+        if interest.smart_episode_filter && !is_upgrade {
+            if let Some(episode_id) = extract_episode_id(&item.title) {
+                let mut seen_eps = rss_state.seen_episodes.lock().await;
+                let interest_eps = seen_eps.entry(interest.id.clone()).or_default();
+                if interest_eps.contains(&episode_id) {
+                    info!("Skipping duplicate episode {} for interest {}", episode_id, interest.name);
+                    seen.insert(item_key, now);
+                    continue;
+                }
+                interest_eps.insert(episode_id);
+            }
+        }
+
+        // Insert to seen BEFORE dropping lock (race condition fix)
         seen.insert(item_key, now);
         drop(seen);
 
@@ -613,6 +1016,9 @@ async fn fetch_torrent_metadata_via_session(
     state: &AppState,
     add_torrent: librqbit::AddTorrent<'_>,
 ) -> Result<TorrentMetadata> {
+    // Get configurable timeout from settings
+    let timeout_secs = state.config.read().await.metadata_timeout_secs;
+
     let session_guard = state.torrent_session.read().await;
     let session = session_guard
         .as_ref()
@@ -636,8 +1042,8 @@ async fn fetch_torrent_metadata_via_session(
         }
     };
 
-    // Wait for metadata (with timeout)
-    let metadata_result = tokio::time::timeout(Duration::from_secs(30), async {
+    // Wait for metadata (with configurable timeout)
+    let metadata_result = tokio::time::timeout(Duration::from_secs(timeout_secs as u64), async {
         loop {
             // Check if we have metadata
             let has_meta = handle.with_metadata(|_| ()).is_ok();
@@ -768,6 +1174,15 @@ pub async fn approve_match(app_handle: &AppHandle, match_id: &str) -> Result<i64
         pending.torrent_url.as_ref().map(|s| &s[..50.min(s.len())])
     );
 
+    // Get custom download path from interest if set
+    let download_path = {
+        let interests = rss_state.interests.read().await;
+        interests
+            .iter()
+            .find(|i| i.id == pending.interest_id)
+            .and_then(|i| i.download_path.clone())
+    };
+
     // Get URI
     let uri = pending
         .magnet_uri
@@ -779,13 +1194,20 @@ pub async fn approve_match(app_handle: &AppHandle, match_id: &str) -> Result<i64
         })?;
 
     info!("Adding torrent from URI: {}...", &uri[..50.min(uri.len())]);
+    if let Some(ref path) = download_path {
+        info!("Using custom download path: {}", path);
+    }
 
-    // Add torrent
+    // Add torrent with optional custom download path
+    let options = download_path.map(|path| crate::models::TorrentAddOptions {
+        output_folder: Some(path),
+        only_files: None,
+    });
     let result = if uri.starts_with("magnet:") {
-        torrent_engine::add_magnet(&state, app_handle, uri, None).await
+        torrent_engine::add_magnet(&state, app_handle, uri, options).await
     } else {
         let bytes = download_torrent_file(&uri).await?;
-        torrent_engine::add_torrent_bytes(&state, app_handle, bytes, None).await
+        torrent_engine::add_torrent_bytes(&state, app_handle, bytes, options).await
     };
 
     let response = result?;
