@@ -12,6 +12,7 @@ import {
   Timer,
   Globe,
   Trash2,
+  Search,
 } from "lucide-svelte";
 
 export interface ActionDefinition {
@@ -184,4 +185,15 @@ registerAction({
   color: "#ef4444",
   configLabelKey: "actions.deleteSource.config",
   defaultData: { deleteFiles: true },
+});
+
+// Internal action type for magnet metadata fetching (not user-configurable)
+registerAction({
+  type: "metadata",
+  labelKey: "inbox.fetchingMetadata",
+  verbKey: "inbox.fetchingMetadata",
+  icon: Search,
+  color: "var(--color-text-muted)",
+  configLabelKey: "inbox.fetchingMetadata",
+  defaultData: {},
 });

@@ -5,7 +5,7 @@ import type {
   TorrentFileInfo,
   TorrentAddOptions,
 } from "$lib/types/torrent";
-import type { SubtitleInfo, MediaPlayer } from "$lib/types/playback";
+import type { SubtitleInfo, MediaPlayer, PlaybackStatusResponse } from "$lib/types/playback";
 import type { AppSettings } from "$lib/types/settings";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -126,6 +126,10 @@ export async function playbackSeek(deviceId: string, position: number): Promise<
 
 export async function playbackSetVolume(deviceId: string, volume: number): Promise<void> {
   return invoke("playback_set_volume", { deviceId, volume });
+}
+
+export async function playbackGetStatus(deviceId: string): Promise<PlaybackStatusResponse> {
+  return invoke("playback_get_status", { deviceId });
 }
 
 // Local playback commands

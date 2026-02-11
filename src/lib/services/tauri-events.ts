@@ -68,15 +68,19 @@ export async function setupEventListeners() {
     ),
   );
 
-  // Torrent events
+  // Torrent events - pending magnets (shows immediately while fetching metadata)
   unlisteners.push(
-    await listen<TorrentAddedResponse>("torrent:added", (event) => {
-      const torrent = event.payload;
+    await listen<{ info_hash: string; name: string }>("torrent:pending", (event) => {
+      const { info_hash, name } = event.payload;
+
+      // Add as initializing torrent with negative ID (placeholder until real ID assigned)
+      // Use info_hash as a pseudo-ID by hashing it
+      const pseudoId = -Math.abs(info_hash.split("").reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) | 0, 0));
 
       torrentsState.addTorrent({
-        id: torrent.id,
-        name: torrent.name,
-        info_hash: torrent.info_hash,
+        id: pseudoId,
+        name,
+        info_hash,
         state: "initializing",
         progress: 0,
         download_speed: 0,
@@ -86,8 +90,57 @@ export async function setupEventListeners() {
         connecting_peers: 0,
         total_bytes: 0,
         downloaded_bytes: 0,
-        file_count: torrent.files.length,
+        file_count: 0,
       });
+      // Status is visible in the torrent row, no toast needed
+    }),
+  );
+
+  // Pending magnet failed to fetch metadata
+  unlisteners.push(
+    await listen<{ info_hash: string; error: string }>("torrent:pending-failed", (event) => {
+      const { info_hash, error } = event.payload;
+
+      // Find pending torrent
+      const pending = torrentsState.torrents.find((tr) => tr.info_hash === info_hash);
+      const name = pending?.name ?? `Magnet ${info_hash.slice(0, 8)}`;
+
+      // Create failed task for history
+      tasksState.createFailedMagnetTask(name, info_hash, error);
+
+      // Remove pending torrent from list
+      if (pending) {
+        torrentsState.removeTorrent(pending.id);
+      }
+      // No toast - failure is visible in history
+    }),
+  );
+
+  unlisteners.push(
+    await listen<TorrentAddedResponse>("torrent:added", (event) => {
+      const torrent = event.payload;
+
+      const newTorrent = {
+        id: torrent.id,
+        name: torrent.name,
+        info_hash: torrent.info_hash,
+        state: "initializing" as const,
+        progress: 0,
+        download_speed: 0,
+        upload_speed: 0,
+        peers_connected: 0,
+        queued_peers: 0,
+        connecting_peers: 0,
+        total_bytes: 0,
+        downloaded_bytes: 0,
+        file_count: torrent.files.length,
+      };
+
+      // Try to update pending placeholder in place, otherwise add as new
+      const promoted = torrentsState.promotePending(torrent.info_hash, newTorrent);
+      if (!promoted) {
+        torrentsState.addTorrent(newTorrent);
+      }
       uiState.addToast(t("toast.torrentAdded", { name: torrent.name }), "success");
 
       // Manual card drop handles its own assignment

@@ -1,8 +1,9 @@
 <!-- Popover for casting torrents to Chromecast devices. Shows file picker for multi-file torrents. -->
 <script lang="ts">
-  import { Tv, Film, Loader2 } from "lucide-svelte";
+  import { Tv, Film, Loader2, ListVideo } from "lucide-svelte";
   import { devicesState } from "$lib/state/devices.svelte";
   import { playbackState } from "$lib/state/playback.svelte";
+  import { queueState } from "$lib/state/queue.svelte";
   import { torrentFiles, playbackCastTorrent, chromecastConnect } from "$lib/services/tauri-commands";
   import type { TorrentFileInfo } from "$lib/types/torrent";
   import { i18n } from "$lib/i18n/state.svelte";
@@ -24,9 +25,11 @@
 
   let step = $state<"loading" | "files" | "devices">("loading");
   let selectedFileIndex = $state<number | null>(null);
+  let playAll = $state(false);
   let playableFiles = $state<TorrentFileInfo[]>([]);
   let casting = $state(false);
 
+  // Skip file picker for single-file torrents, go straight to device selection
   onMount(async () => {
     try {
       const files = await torrentFiles(torrentId);
@@ -48,8 +51,17 @@
     }
   });
 
-  function selectFile(index: number) {
+  function selectFile(e: MouseEvent, index: number) {
+    e.stopPropagation();
     selectedFileIndex = index;
+    playAll = false;
+    step = "devices";
+  }
+
+  function selectPlayAll(e: MouseEvent) {
+    e.stopPropagation();
+    playAll = true;
+    selectedFileIndex = playableFiles[0]?.index ?? null;
     step = "devices";
   }
 
@@ -63,8 +75,11 @@
         await chromecastConnect(deviceId);
         devicesState.updateDeviceStatus(deviceId, "connected");
       }
+
+      // Cast the first file
       await playbackCastTorrent(deviceId, torrentId, selectedFileIndex);
-      // Set playback context so the PlaybackBar shows
+
+      // Set playback context
       const selectedFile = playableFiles.find(f => f.index === selectedFileIndex);
       playbackState.setContext(
         selectedFile?.name ?? torrentName,
@@ -72,6 +87,15 @@
         torrentId,
         selectedFileIndex
       );
+
+      // If playing all, add remaining files to queue
+      if (playAll && playableFiles.length > 1) {
+        const remaining = playableFiles
+          .filter(f => f.index !== selectedFileIndex)
+          .map(f => ({ index: f.index, name: f.name }));
+        queueState.addBatch(torrentId, remaining);
+      }
+
       onClose();
     } catch (e) {
       console.error("Failed to cast:", e);
@@ -101,10 +125,20 @@
     <div class="mb-2 text-sm font-medium text-[var(--color-text)]">
       {i18n.t("cast.selectFile")}
     </div>
-    <div class="max-h-48 space-y-1 overflow-y-auto">
+    <div class="max-h-56 space-y-1 overflow-y-auto">
+      <!-- Play All option -->
+      <button
+        onclick={selectPlayAll}
+        class="flex w-full items-center gap-2 rounded-lg bg-[var(--color-primary)]/10 px-2 py-1.5 text-left text-sm text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)]/20"
+      >
+        <ListVideo class="h-4 w-4 shrink-0" />
+        <span class="flex-1">{i18n.t("playback.playAll")}</span>
+        <span class="text-xs opacity-70">{playableFiles.length}</span>
+      </button>
+      <div class="my-1.5 border-t border-[var(--color-border)]"></div>
       {#each playableFiles as file}
         <button
-          onclick={() => selectFile(file.index)}
+          onclick={(e) => selectFile(e, file.index)}
           class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-bg-secondary)]"
         >
           <Film class="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />

@@ -1,15 +1,49 @@
 <!-- Persistent playback toolbar for Chromecast control. -->
 <script lang="ts">
   import { Cast, Play, Pause, SkipForward, SkipBack, ChevronDown, Tv, X } from "lucide-svelte";
+  import { onMount, onDestroy } from "svelte";
   import { playbackState } from "$lib/state/playback.svelte";
   import { queueState } from "$lib/state/queue.svelte";
   import { devicesState } from "$lib/state/devices.svelte";
-  import { playbackPlay, playbackPause, playbackSeek, playbackCastTorrent, playbackStop } from "$lib/services/tauri-commands";
+  import { playbackPlay, playbackPause, playbackSeek, playbackCastTorrent, playbackStop, playbackGetStatus } from "$lib/services/tauri-commands";
   import { i18n } from "$lib/i18n/state.svelte";
 
   let seeking = $state(false);
   let seekValue = $state(0);
   let devicePickerOpen = $state(false);
+  let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+  // Poll playback status every second when we have an active device
+  async function pollStatus() {
+    const id = playbackState.activeDeviceId;
+    if (!id) return;
+    try {
+      const status = await playbackGetStatus(id);
+      playbackState.setStatus(status);
+    } catch {
+      // Device disconnected or error - stop polling
+    }
+  }
+
+  $effect(() => {
+    const id = playbackState.activeDeviceId;
+    if (id && !pollInterval) {
+      // Start polling
+      pollStatus();
+      pollInterval = setInterval(pollStatus, 1000);
+    } else if (!id && pollInterval) {
+      // Stop polling
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  });
+
+  onDestroy(() => {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  });
 
   const currentTime = $derived(playbackState.currentTime);
   const duration = $derived(playbackState.duration);

@@ -163,7 +163,9 @@
     "noPlaylets": "No playlets",
     "removeFromHistory": "Remove from history",
     "retry": "Retry",
-    "checkPermissions": "Check Permissions"
+    "checkPermissions": "Check Permissions",
+    "fetchingMetadata": "Fetching metadata...",
+    "metadataFetchFailed": "Metadata fetch failed"
   },
   "playlets": {
     "do": "Do",
@@ -321,6 +323,8 @@
     "deviceDisconnected": "Device disconnected",
     "couldntConnect": "Couldn't connect: {error}",
     "torrentAdded": "{name} added",
+    "fetchingMetadata": "Fetching metadata: {name}",
+    "magnetFailed": "Magnet failed: {error}",
     "recheckingPieces": "Rechecking pieces",
     "fileSelectionUpdated": "File selection updated",
     "downloadFinished": "Download finished",
@@ -334,6 +338,7 @@
   "playback": {
     "nowPlaying": "Now playing",
     "upNext": "Up next",
+    "playAll": "Play all",
     "addToQueue": "Add to Queue",
     "addAllToQueue": "Add all to Queue",
     "addedToQueue": "Added to queue",

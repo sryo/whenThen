@@ -34,6 +34,16 @@ export const torrentsState = {
     }
   },
 
+  // Update a pending torrent (negative ID) to a real torrent, keeping its position
+  promotePending(infoHash: string, torrent: TorrentSummary) {
+    const idx = torrents.findIndex((t) => t.info_hash === infoHash && t.id < 0);
+    if (idx >= 0) {
+      torrents[idx] = torrent;
+      return true;
+    }
+    return false;
+  },
+
   removeTorrent(id: number) {
     torrents = torrents.filter((t) => t.id !== id);
   },

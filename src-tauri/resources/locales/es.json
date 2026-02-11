@@ -163,7 +163,9 @@
     "noPlaylets": "Sin playlets",
     "removeFromHistory": "Eliminar del historial",
     "retry": "Reintentar",
-    "checkPermissions": "Verificar permisos"
+    "checkPermissions": "Verificar permisos",
+    "fetchingMetadata": "Obteniendo metadatos...",
+    "metadataFetchFailed": "Fallo al obtener metadatos"
   },
   "playlets": {
     "do": "Hacer",
@@ -321,6 +323,8 @@
     "deviceDisconnected": "Dispositivo desconectado",
     "couldntConnect": "No se pudo conectar: {error}",
     "torrentAdded": "{name} agregado",
+    "fetchingMetadata": "Obteniendo metadatos: {name}",
+    "magnetFailed": "Magnet falló: {error}",
     "recheckingPieces": "Verificando piezas",
     "fileSelectionUpdated": "Selección de archivos actualizada",
     "downloadFinished": "Descarga completada",
@@ -334,6 +338,7 @@
   "playback": {
     "nowPlaying": "Reproduciendo",
     "upNext": "Siguiente",
+    "playAll": "Reproducir todo",
     "addToQueue": "Agregar a la fila",
     "addAllToQueue": "Agregar todo a la fila",
     "addedToQueue": "Agregado a la fila",

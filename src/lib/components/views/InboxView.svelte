@@ -150,9 +150,12 @@
 
   async function handleRemove(id: number) {
     try {
-      await torrentDelete(id, false);
+      // Pending magnets (negative ID) have no backend torrent to delete
+      if (id >= 0) {
+        await torrentDelete(id, false);
+        tasksState.failTasksForTorrent(id);
+      }
       torrentsState.removeTorrent(id);
-      tasksState.failTasksForTorrent(id);
     } catch (e) {
       console.error("Failed to remove torrent:", e);
     }
@@ -168,9 +171,12 @@
 
   async function handleDeleteWithFiles(id: number) {
     try {
-      await torrentDelete(id, true);
+      // Pending magnets (negative ID) have no backend torrent or files to delete
+      if (id >= 0) {
+        await torrentDelete(id, true);
+        tasksState.failTasksForTorrent(id);
+      }
       torrentsState.removeTorrent(id);
-      tasksState.failTasksForTorrent(id);
     } catch (e) {
       console.error("Failed to delete torrent with files:", e);
     }
@@ -650,15 +656,19 @@
             </div>
             <div class="flex items-center justify-between text-sm text-[var(--color-text-muted)]">
               <div class="flex items-center gap-3">
-                <span class="font-medium">{formatPercent(torrent.progress)}</span>
-                {#if torrent.state !== "paused"}
-                  <span>{formatSpeed(torrent.download_speed)}</span>
-                  {#if torrent.peers_connected > 0 || torrent.queued_peers > 0 || torrent.connecting_peers > 0}
-                    {@const total = torrent.peers_connected + (torrent.queued_peers ?? 0) + (torrent.connecting_peers ?? 0)}
-                    <span title="{torrent.peers_connected} {i18n.t("common.live")}, {torrent.connecting_peers ?? 0} {i18n.t("common.connecting")}, {torrent.queued_peers ?? 0} {i18n.t("common.queued")}">• {total} {total === 1 ? i18n.t("common.peer") : i18n.t("common.peers")}</span>
-                  {/if}
+                {#if torrent.id < 0}
+                  <span class="text-[var(--color-text-muted)]">{i18n.t("inbox.fetchingMetadata")}</span>
                 {:else}
-                  <span class="text-[var(--color-warning)]">{i18n.t("inbox.paused")}</span>
+                  <span class="font-medium">{formatPercent(torrent.progress)}</span>
+                  {#if torrent.state !== "paused"}
+                    <span>{formatSpeed(torrent.download_speed)}</span>
+                    {#if torrent.peers_connected > 0 || torrent.queued_peers > 0 || torrent.connecting_peers > 0}
+                      {@const total = torrent.peers_connected + (torrent.queued_peers ?? 0) + (torrent.connecting_peers ?? 0)}
+                      <span title="{torrent.peers_connected} {i18n.t("common.live")}, {torrent.connecting_peers ?? 0} {i18n.t("common.connecting")}, {torrent.queued_peers ?? 0} {i18n.t("common.queued")}">• {total} {total === 1 ? i18n.t("common.peer") : i18n.t("common.peers")}</span>
+                    {/if}
+                  {:else}
+                    <span class="text-[var(--color-warning)]">{i18n.t("inbox.paused")}</span>
+                  {/if}
                 {/if}
               </div>
               <button

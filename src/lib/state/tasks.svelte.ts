@@ -248,6 +248,32 @@ export const tasksState = {
     if (changed) persistTasks();
   },
 
+  // Create a failed task for a magnet that couldn't fetch metadata
+  createFailedMagnetTask(torrentName: string, infoHash: string, error: string): Task {
+    const task: Task = {
+      id: crypto.randomUUID(),
+      torrentId: -1,
+      torrentName,
+      playletId: null,
+      playletName: null,
+      status: "failed",
+      actionResults: [{
+        actionId: "metadata-fetch",
+        actionType: "metadata" as ActionType,
+        status: "failed",
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        error,
+        skipReason: null,
+      }],
+      createdAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+    };
+    tasks = [task, ...tasks];
+    persistTasks();
+    return task;
+  },
+
   // Remove orphaned tasks that reference non-existent torrents
   reconcileWithTorrents(validTorrentIds: Set<number>) {
     let changed = false;

@@ -117,11 +117,11 @@ pub fn run() {
 
                 // App menu
                 let about_item = PredefinedMenuItem::about(h, Some(&t("menu.about")), None)?;
-                let settings_item = MenuItem::with_id(h, "settings", &t("menu.settings"), true, Some("CmdOrCtrl+,"))?;
+                let settings_item = MenuItem::with_id(h, "settings", t("menu.settings"), true, Some("CmdOrCtrl+,"))?;
                 let hide_item = PredefinedMenuItem::hide(h, Some(&t("menu.hide")))?;
                 let hide_others_item = PredefinedMenuItem::hide_others(h, Some(&t("menu.hideOthers")))?;
                 let show_all_item = PredefinedMenuItem::show_all(h, Some(&t("menu.showAll")))?;
-                let quit_item = MenuItem::with_id(h, "quit", &t("menu.quit"), true, Some("CmdOrCtrl+Q"))?;
+                let quit_item = MenuItem::with_id(h, "quit", t("menu.quit"), true, Some("CmdOrCtrl+Q"))?;
 
                 let app_submenu = Submenu::with_items(
                     h,
@@ -141,13 +141,13 @@ pub fn run() {
                 )?;
 
                 // File menu
-                let add_torrent_item = MenuItem::with_id(h, "add-torrent", &t("menu.addTorrent"), true, Some("CmdOrCtrl+O"))?;
-                let add_magnet_item = MenuItem::with_id(h, "add-magnet", &t("menu.addMagnet"), true, Some("CmdOrCtrl+U"))?;
-                let check_feeds_item = MenuItem::with_id(h, "check-feeds", &t("menu.checkFeeds"), true, Some("CmdOrCtrl+R"))?;
+                let add_torrent_item = MenuItem::with_id(h, "add-torrent", t("menu.addTorrent"), true, Some("CmdOrCtrl+O"))?;
+                let add_magnet_item = MenuItem::with_id(h, "add-magnet", t("menu.addMagnet"), true, Some("CmdOrCtrl+U"))?;
+                let check_feeds_item = MenuItem::with_id(h, "check-feeds", t("menu.checkFeeds"), true, Some("CmdOrCtrl+R"))?;
 
                 let file_submenu = Submenu::with_items(
                     h,
-                    &t("menu.file"),
+                    t("menu.file"),
                     true,
                     &[
                         &add_torrent_item,
@@ -167,7 +167,7 @@ pub fn run() {
 
                 let edit_submenu = Submenu::with_items(
                     h,
-                    &t("menu.edit"),
+                    t("menu.edit"),
                     true,
                     &[
                         &undo_item,
@@ -181,25 +181,25 @@ pub fn run() {
                 )?;
 
                 // View menu
-                let view_inbox_item = MenuItem::with_id(h, "view-inbox", &t("menu.inbox"), true, Some("CmdOrCtrl+1"))?;
-                let view_playlets_item = MenuItem::with_id(h, "view-playlets", &t("menu.playlets"), true, Some("CmdOrCtrl+2"))?;
-                let view_settings_item = MenuItem::with_id(h, "view-settings", &t("nav.settings"), true, Some("CmdOrCtrl+3"))?;
+                let view_inbox_item = MenuItem::with_id(h, "view-inbox", t("menu.inbox"), true, Some("CmdOrCtrl+1"))?;
+                let view_playlets_item = MenuItem::with_id(h, "view-playlets", t("menu.playlets"), true, Some("CmdOrCtrl+2"))?;
+                let view_settings_item = MenuItem::with_id(h, "view-settings", t("nav.settings"), true, Some("CmdOrCtrl+3"))?;
 
                 let view_submenu = Submenu::with_items(
                     h,
-                    &t("menu.view"),
+                    t("menu.view"),
                     true,
                     &[&view_inbox_item, &view_playlets_item, &view_settings_item],
                 )?;
 
                 // Torrents menu
-                let pause_all_item = MenuItem::with_id(h, "pause-all", &t("menu.pauseAll"), true, None::<&str>)?;
-                let resume_all_item = MenuItem::with_id(h, "resume-all", &t("menu.resumeAll"), true, None::<&str>)?;
-                let clear_completed_item = MenuItem::with_id(h, "clear-completed", &t("menu.clearCompleted"), true, None::<&str>)?;
+                let pause_all_item = MenuItem::with_id(h, "pause-all", t("menu.pauseAll"), true, None::<&str>)?;
+                let resume_all_item = MenuItem::with_id(h, "resume-all", t("menu.resumeAll"), true, None::<&str>)?;
+                let clear_completed_item = MenuItem::with_id(h, "clear-completed", t("menu.clearCompleted"), true, None::<&str>)?;
 
                 let torrents_submenu = Submenu::with_items(
                     h,
-                    &t("menu.torrents"),
+                    t("menu.torrents"),
                     true,
                     &[
                         &pause_all_item,
@@ -214,17 +214,17 @@ pub fn run() {
 
                 let window_submenu = Submenu::with_items(
                     h,
-                    &t("menu.window"),
+                    t("menu.window"),
                     true,
                     &[&minimize_item],
                 )?;
 
                 // Help menu
-                let help_docs_item = MenuItem::with_id(h, "help-docs", &t("menu.helpDocs"), true, None::<&str>)?;
+                let help_docs_item = MenuItem::with_id(h, "help-docs", t("menu.helpDocs"), true, None::<&str>)?;
 
                 let help_submenu = Submenu::with_items(
                     h,
-                    &t("menu.help"),
+                    t("menu.help"),
                     true,
                     &[&help_docs_item],
                 )?;
@@ -553,6 +553,7 @@ pub fn run() {
                 }
                 "help-docs" => {
                     use tauri_plugin_shell::ShellExt;
+                    #[allow(deprecated)]
                     let _ = app_handle.shell().open("https://whenthen.app/docs", None);
                 }
                 _ => {}
@@ -630,6 +631,7 @@ fn handle_opened_urls(app_handle: &tauri::AppHandle, urls: Vec<tauri::Url>) {
     let app_handle = app_handle.clone();
     tauri::async_runtime::spawn(async move {
         let state = app_handle.state::<AppState>();
+        // Poll for session init: 30 retries * 500ms = 15s timeout
         let mut retries = 0;
         loop {
             let guard = state.torrent_session.read().await;
@@ -651,31 +653,40 @@ fn handle_opened_urls(app_handle: &tauri::AppHandle, urls: Vec<tauri::Url>) {
                     let magnet_uri = url.as_str().to_string();
                     info!("Handling magnet link: {}", magnet_uri);
 
-                    // Timeout prevents hanging on magnets with no peers/metadata
-                    let add_result = tokio::time::timeout(
-                        std::time::Duration::from_secs(30),
-                        services::torrent_engine::add_magnet(
-                            &state,
-                            &app_handle,
+                    // Parse magnet to get info hash and display name
+                    let pending = services::torrent_engine::parse_magnet_info(&magnet_uri);
+
+                    // Emit pending event immediately so it shows in UI
+                    let _ = app_handle.emit("torrent:pending", &pending);
+                    info!("Emitted pending magnet: {} ({})", pending.name, pending.info_hash);
+
+                    // Clone what we need for the background task
+                    let inner_state: AppState = (*app_handle.state::<AppState>()).clone();
+                    let inner_handle = app_handle.clone();
+                    let info_hash_for_error = pending.info_hash.clone();
+
+                    // Spawn the actual add in background (no timeout - stays in "fetching" state indefinitely)
+                    tokio::spawn(async move {
+                        match services::torrent_engine::add_magnet(
+                            &inner_state,
+                            &inner_handle,
                             magnet_uri.clone(),
                             None,
-                        )
-                    ).await;
+                        ).await {
+                            Ok(_) => {
+                                info!("Magnet added successfully");
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to add magnet: {:?}", e);
+                                let _ = inner_handle.emit("torrent:pending-failed", &serde_json::json!({
+                                    "info_hash": info_hash_for_error,
+                                    "error": e.to_string()
+                                }));
+                            }
+                        }
+                    });
 
-                    match add_result {
-                        Ok(Ok(_)) => {
-                            info!("Magnet added successfully");
-                            Ok(())
-                        }
-                        Ok(Err(e)) => {
-                            tracing::error!("Failed to add magnet: {:?}", e);
-                            Err(e)
-                        }
-                        Err(_) => {
-                            tracing::error!("Timeout adding magnet after 30s");
-                            Err(crate::errors::WhenThenError::Torrent("Timeout adding magnet".into()))
-                        }
-                    }
+                    Ok(())
                 }
                 "file" => {
                     if let Ok(path) = url.to_file_path() {

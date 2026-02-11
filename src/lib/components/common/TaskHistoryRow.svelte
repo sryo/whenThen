@@ -150,6 +150,9 @@
         {#if playlet && actionSummary}
           <span>{actionSummary}</span>
           <span>·</span>
+        {:else if !playlet && task.status === "failed"}
+          <span class="text-[var(--color-error)]">{i18n.t("inbox.metadataFetchFailed")}</span>
+          <span>·</span>
         {/if}
         <span>{formatRelativeTime(task.createdAt)}</span>
       </div>
@@ -269,7 +272,7 @@
           <div class="flex items-center gap-3 text-[var(--color-text-muted)]">
             <span class="w-16 shrink-0">{hasFailed ? i18n.t("inbox.failed") : i18n.t("inbox.finished")}</span>
             <span>{formatDateTime(task.completedAt)}</span>
-            {#if hasFailed}
+            {#if hasFailed && playlet}
               <button
                 onclick={handleRetry}
                 class="ml-auto flex items-center gap-1 rounded-md bg-[var(--color-bg-tertiary)] px-2 py-1 text-xs text-[var(--color-text)] hover:bg-[var(--color-border)]"
