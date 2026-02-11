@@ -53,6 +53,7 @@ pub enum Codec {
 }
 
 impl Codec {
+    #[allow(dead_code)]
     pub fn as_str(&self) -> &'static str {
         match self {
             Codec::X264 => "x264",
@@ -77,6 +78,7 @@ pub struct MediaInfo {
 }
 
 impl MediaInfo {
+    #[allow(dead_code)]
     pub fn is_tv(&self) -> bool {
         self.season.is_some() || self.episode.is_some()
     }

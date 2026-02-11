@@ -325,6 +325,7 @@ pub async fn rss_check_now(app_handle: tauri::AppHandle) -> Result<usize> {
 // ── Bad items commands ────────────────────────────────────────────────────────
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn rss_mark_bad(
     app_handle: tauri::AppHandle,
     state: State<'_, AppState>,

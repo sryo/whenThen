@@ -184,7 +184,7 @@ function createAction(type: ActionType): Action {
 
 const SUBTITLE_EXTENSIONS = ["srt", "ass", "sub", "vtt"];
 
-// Compare a numeric value using size operators
+// Default operator is "gt"; undefined target = no constraint
 function numericMatch(actual: number, operator: string | undefined, target: number | undefined, targetEnd: number | undefined): boolean {
   if (target === undefined) return true;
   const op = operator ?? "gt";

@@ -46,6 +46,7 @@ class UiState {
     } else {
       this.collapsedSections.add(name);
     }
+    // Reassign Set to trigger Svelte reactivity
     this.collapsedSections = new Set(this.collapsedSections);
     this.persistCollapsedSections();
   }

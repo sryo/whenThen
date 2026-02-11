@@ -35,7 +35,7 @@ fn build_search_url(url_template: &str, interest: &Interest) -> String {
 }
 
 /// Calculate backoff duration based on failure count.
-/// 1 failure = 1 min, 2 = 2 min, 3 = 4 min, 4 = 8 min, 5 = 16 min, 6+ = 30 min
+/// Exponential backoff: 1, 2, 4, 8, 16 min, capped at 30 min.
 fn calculate_backoff(failure_count: u32) -> Duration {
     let mins = (1u64 << failure_count.saturating_sub(1).min(5)).min(30);
     Duration::from_secs(mins * 60)
@@ -139,12 +139,14 @@ async fn maybe_cleanup_seen_items(rss_state: &RssState) {
     *rss_state.last_cleanup.lock().await = std::time::Instant::now();
 }
 
+#[allow(dead_code)]
 pub struct RssServiceHandle {
     shutdown_tx: tokio::sync::oneshot::Sender<()>,
 }
 
 impl RssServiceHandle {
     /// Stop the RSS polling service.
+    #[allow(dead_code)]
     pub fn stop(self) {
         let _ = self.shutdown_tx.send(());
     }
@@ -287,10 +289,10 @@ fn parse_feed_entries(feed: feed_rs::model::Feed) -> Vec<ParsedFeedItem> {
                     if torrent_url.is_none() {
                         torrent_url = Some(link.href.clone());
                     }
-                } else if link.media_type.as_deref() == Some("application/x-bittorrent") {
-                    if torrent_url.is_none() {
-                        torrent_url = Some(link.href.clone());
-                    }
+                } else if link.media_type.as_deref() == Some("application/x-bittorrent")
+                    && torrent_url.is_none()
+                {
+                    torrent_url = Some(link.href.clone());
                 }
             }
 
@@ -690,7 +692,7 @@ async fn check_source_for_matches_with_cache(
                 continue;
             }
 
-            // Smart episode filter: check if we've seen this episode for this interest
+            // Skip repeated episodes unless this is a PROPER/REPACK upgrade
             if interest.smart_episode_filter && !is_upgrade {
                 if let Some(episode_id) = extract_episode_id(&item.title) {
                     let mut seen_eps = rss_state.seen_episodes.lock().await;

@@ -130,9 +130,9 @@ fn extract_title(name: &str, info: &MediaInfo) -> String {
 
     // Clean up bracketed tags at the start
     let title = title
-        .trim_start_matches(|c: char| c == '[')
+        .trim_start_matches('[')
         .split(']')
-        .last()
+        .next_back()
         .unwrap_or(&title)
         .trim()
         .to_string();

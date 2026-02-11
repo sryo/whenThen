@@ -241,8 +241,7 @@ mod launch_services {
     pub fn discover_media_players() -> Vec<MediaPlayer> {
         let mut bundle_ids = BTreeSet::new();
 
-        // Query abstract parents and common concrete subtypes to catch apps
-        // that register for specific formats but not the parent UTI.
+        // Query both abstract and specific UTIs to catch all media player registrations
         const UTIS: &[&str] = &[
             "public.movie",
             "public.audio",

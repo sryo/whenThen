@@ -22,19 +22,19 @@ fn get_app_bundle_path() -> Option<PathBuf> {
 }
 
 /// Check if the app is already in /Applications.
-fn is_in_applications(app_path: &PathBuf) -> bool {
+fn is_in_applications(app_path: &std::path::Path) -> bool {
     let path_str = app_path.to_string_lossy();
     path_str.starts_with("/Applications/") || path_str.starts_with("/Applications\\")
 }
 
 /// Check if the app is running from a disk image (mounted DMG).
-fn is_on_disk_image(app_path: &PathBuf) -> bool {
+fn is_on_disk_image(app_path: &std::path::Path) -> bool {
     let path_str = app_path.to_string_lossy();
     path_str.starts_with("/Volumes/")
 }
 
 /// Move the app bundle to /Applications and relaunch.
-fn move_and_relaunch(app_path: &PathBuf) -> Result<(), String> {
+fn move_and_relaunch(app_path: &std::path::Path) -> Result<(), String> {
     let app_name = app_path.file_name()
         .ok_or("Invalid app path")?
         .to_string_lossy();

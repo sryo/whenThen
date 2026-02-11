@@ -10,6 +10,7 @@ use crate::services::media_server::{MediaServerHandle, TokenEntry};
 use crate::services::rss::RssState;
 use crate::services::scraper::ScraperState;
 
+#[derive(Clone)]
 pub struct AppState {
     pub torrent_session: Arc<RwLock<Option<Arc<librqbit::Session>>>>,
     pub discovered_devices: Arc<RwLock<HashMap<String, DiscoveredDevice>>>,

@@ -136,6 +136,7 @@ mod macos_associations {
             return None;
         }
         let len = CFStringGetLength(s);
+        // 4 bytes per char (UTF-8 worst case) + null terminator
         let buf_size = (len * 4 + 1) as usize;
         let mut buf = vec![0u8; buf_size];
         if CFStringGetCString(s, buf.as_mut_ptr(), buf_size as CFIndex, K_CF_STRING_ENCODING_UTF8) != 0 {

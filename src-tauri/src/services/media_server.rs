@@ -137,7 +137,7 @@ fn parse_range(range_str: &str, file_length: u64) -> Result<(u64, u64), StatusCo
     let range_str = range_str.trim_start_matches("bytes=");
     let parts: Vec<&str> = range_str.split('-').collect();
 
-    // Suffix range: bytes=-500
+    // Suffix range: bytes=-500 means last 500 bytes
     let (start, end) = if parts.first().is_none_or(|s| s.is_empty()) {
         let suffix: u64 = parts.get(1)
             .and_then(|s| s.parse().ok())

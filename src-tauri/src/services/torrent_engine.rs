@@ -22,9 +22,9 @@ fn speed_limit(bps: u64) -> Option<NonZeroU32> {
 }
 
 pub fn expand_path(path: &str) -> PathBuf {
-    if path.starts_with("~/") {
+    if let Some(stripped) = path.strip_prefix("~/") {
         if let Some(home) = dirs::home_dir() {
-            return home.join(&path[2..]);
+            return home.join(stripped);
         }
     } else if path == "~" {
         if let Some(home) = dirs::home_dir() {
@@ -143,6 +143,7 @@ pub async fn sync_restored_torrents(
             0.0
         };
 
+        // librqbit reports speeds in Mbps; convert to bytes/sec
         let (dl_speed, ul_speed, peers) = if let Some(ref live) = stats.live {
             (
                 (live.download_speed.mbps * 1024.0 * 1024.0) as u64,
@@ -181,6 +182,74 @@ fn check_disk_space(download_dir: &str) -> Result<()> {
     // TODO: check available space when std::fs::available_space stabilizes
     let _ = path;
     Ok(())
+}
+
+use crate::models::PendingMagnet;
+
+/// Parse a magnet URL to extract info hash and display name without blocking.
+pub fn parse_magnet_info(magnet_url: &str) -> PendingMagnet {
+    let mut info_hash = String::new();
+    let mut name = String::new();
+
+    // Parse query string from magnet URL
+    if let Some(query_start) = magnet_url.find('?') {
+        let query = &magnet_url[query_start + 1..];
+        for part in query.split('&') {
+            if let Some((key, value)) = part.split_once('=') {
+                match key {
+                    "xt" => {
+                        // Extract info hash from urn:btih:HASH
+                        if let Some(hash) = value.strip_prefix("urn:btih:") {
+                            info_hash = hash.to_string();
+                        }
+                    }
+                    "dn" => {
+                        // URL decode the display name
+                        name = urlencoding::decode(value)
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|_| value.to_string());
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    // Fallback if no name found
+    if name.is_empty() {
+        name = if info_hash.is_empty() {
+            "Unknown".to_string()
+        } else {
+            format!("Magnet {}", &info_hash[..8.min(info_hash.len())])
+        };
+    }
+
+    PendingMagnet { info_hash, name }
+}
+
+/// Reliable public trackers to inject into magnets for better peer discovery.
+const FALLBACK_TRACKERS: &[&str] = &[
+    "udp://tracker.opentrackr.org:1337/announce",
+    "udp://open.stealth.si:80/announce",
+    "udp://tracker.torrent.eu.org:451/announce",
+    "udp://tracker.bittor.pw:1337/announce",
+    "udp://public.popcorn-tracker.org:6969/announce",
+    "udp://tracker.dler.org:6969/announce",
+    "udp://exodus.desync.com:6969/announce",
+    "udp://open.demonii.com:1337/announce",
+];
+
+/// Inject fallback trackers into a magnet URL for better peer discovery.
+fn inject_fallback_trackers(magnet_url: &str) -> String {
+    let mut result = magnet_url.to_string();
+    for tracker in FALLBACK_TRACKERS {
+        let encoded = urlencoding::encode(tracker);
+        let param = format!("&tr={}", encoded);
+        if !result.contains(&encoded.to_string()) {
+            result.push_str(&param);
+        }
+    }
+    result
 }
 
 pub async fn add_magnet(
@@ -222,6 +291,8 @@ pub async fn add_magnet(
         ..Default::default()
     };
 
+    // Inject fallback trackers for better peer discovery
+    let magnet_url = inject_fallback_trackers(&magnet_url);
     debug!("Adding magnet: {}", &magnet_url);
 
     let response = session

@@ -45,15 +45,13 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
         })
         .on_tray_icon_event(|tray, event| {
             let app = tray.app_handle();
-            match event {
-                TrayIconEvent::Click {
-                    button: MouseButton::Left,
-                    button_state: MouseButtonState::Up,
-                    ..
-                } => {
-                    show_main_window(app);
-                }
-                _ => {}
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(app);
             }
         })
         .build(app)?;
@@ -61,7 +59,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     // Listen for pending count changes to update icon
     let app_handle = app.clone();
     app.listen("rss:pending-count", move |event| {
-        if let Some(count) = event.payload().parse::<usize>().ok() {
+        if let Ok(count) = event.payload().parse::<usize>() {
             set_icon_active(&app_handle, count > 0);
         }
     });

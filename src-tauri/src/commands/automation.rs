@@ -21,6 +21,7 @@ pub async fn check_automation_permission() -> Result<String> {
         Ok("granted".into())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        // macOS error -10000 = insufficient Automation permission
         if stderr.contains("-10000") || stderr.contains("errAEEventNotPermitted") {
             Err(WhenThenError::Internal(
                 "Automation permission required. Open System Settings > Privacy & Security > Automation and enable When.".into(),

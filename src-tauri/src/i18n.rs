@@ -121,6 +121,7 @@ pub fn t(key: &str) -> String {
 }
 
 /// Get a translation with placeholder interpolation.
+#[allow(dead_code)]
 pub fn t_with(key: &str, args: &[(&str, &str)]) -> String {
     let mut result = t(key);
     for (placeholder, value) in args {
@@ -147,6 +148,7 @@ pub fn get_translations_for_locale(locale: Option<String>) -> Value {
 }
 
 /// Get the cached translations (used by Rust-side t() function).
+#[allow(dead_code)]
 pub fn get_all_translations() -> Value {
     let Some(translations) = TRANSLATIONS.get() else {
         return Value::Object(serde_json::Map::new());

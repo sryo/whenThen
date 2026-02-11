@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use tauri::{AppHandle, State};
 use uuid::Uuid;
 
@@ -188,6 +186,7 @@ pub async fn playback_seek_relative(
         .ok_or_else(|| WhenThenError::DeviceNotFound(device_id.clone()))?;
 
     let status = conn.get_status().await?;
+    // Release lock before await to avoid holding across suspension point
     drop(connections);
 
     let new_position = (status.current_time + delta_secs).max(0.0);

@@ -233,6 +233,7 @@
     cardsContainer?.setPointerCapture(e.pointerId);
   }
 
+  // Find drop position by comparing cursor Y to card midpoints
   function handlePlayletDragMove(e: PointerEvent) {
     if (dragFromIndex === null || !cardsContainer) return;
     const cards = cardsContainer.querySelectorAll<HTMLElement>("[data-playlet-index]");
@@ -325,7 +326,7 @@
           ondragleave={handleCardDragLeave}
           ondrop={(e) => handleCardDrop(e, playlet.id)}
           oncontextmenu={(e) => ctx.open(e, playlet.id)}
-          onanimationend={() => { newCardIds.delete(playlet.id); newCardIds = newCardIds; }}
+          onanimationend={() => { newCardIds.delete(playlet.id); newCardIds = newCardIds; /* Reassign Set to trigger reactivity */ }}
           class="group flex flex-col overflow-hidden rounded-xl bg-[var(--color-success)]/10 text-left transition-all duration-150 {draggingOverPlayletId === playlet.id ? 'ring-2 ring-[var(--color-primary)] scale-[1.02] shadow-lg' : 'hover:bg-[var(--color-success)]/15'} {newCardIds.has(playlet.id) ? 'card-enter' : ''} {removingCardId === playlet.id ? 'card-exit' : ''} {!playlet.enabled ? 'opacity-50' : ''} {dragFromIndex === index ? 'opacity-40' : ''}"
         >
           <div class="flex items-center">
@@ -379,7 +380,7 @@
 
     <button
       onclick={handleNewPlaylet}
-      class="flex items-center gap-1 text-xs font-medium text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+      class="flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text)]"
     >
       <Plus class="h-3.5 w-3.5" />
       {i18n.t("playlets.newPlaylet")}

@@ -5,6 +5,7 @@ import { t } from "$lib/i18n";
 import type { TorrentAddedResponse } from "$lib/types/torrent";
 import type { Playlet, TriggerType } from "$lib/types/playlet";
 
+// Prevents auto-assign race when user manually drops torrent on playlet
 // Counter for in-flight manual card drops. Incremented before the IPC call
 // so the torrent:added event handler (which fires before the IPC resolves)
 // knows to skip auto-assignment.

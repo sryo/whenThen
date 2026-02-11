@@ -6,15 +6,15 @@ use std::sync::Arc;
 use chrono::Utc;
 use regex::Regex;
 use scraper::{Html, Selector};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, RwLock};
 use tracing::{info, warn};
 
 use crate::errors::{Result, WhenThenError};
 use crate::models::{Interest, PendingMatch, ScrapedItem, ScraperConfig, ScraperTestResult};
 use crate::services::rss::{evaluate_filters_with_logic, ParsedFeedItem, RssState};
-use crate::state::AppState;
 
+#[allow(dead_code)]
 pub struct ScraperState {
     pub configs: Arc<RwLock<Vec<ScraperConfig>>>,
     /// Seen items: key -> ISO timestamp
@@ -172,6 +172,7 @@ fn parse_size(text: &str) -> Option<u64> {
 }
 
 /// Build search URL from template.
+#[allow(dead_code)]
 fn build_search_url(config: &ScraperConfig, interest: &Interest) -> Option<String> {
     config.search_url_template.as_ref().map(|template| {
         let term = interest
@@ -185,6 +186,7 @@ fn build_search_url(config: &ScraperConfig, interest: &Interest) -> Option<Strin
 }
 
 /// Check a scraper config against all interests and queue matches.
+#[allow(dead_code)]
 pub async fn check_scraper_for_matches(
     app_handle: &AppHandle,
     scraper_state: &ScraperState,
@@ -225,6 +227,7 @@ pub async fn check_scraper_for_matches(
 }
 
 /// Process scraped items and create pending matches.
+#[allow(dead_code)]
 async fn process_scraped_items(
     app_handle: &AppHandle,
     scraper_state: &ScraperState,

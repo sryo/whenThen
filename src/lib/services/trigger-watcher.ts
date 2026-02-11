@@ -8,6 +8,7 @@ import type { TorrentProgress } from "$lib/types/torrent";
 
 let unlisteners: (() => void)[] = [];
 
+// Deduplicates seeding_ratio triggers (progress events fire frequently)
 // Track which (playletId, torrentId) pairs have already fired for seeding ratio
 const firedRatio = new Set<string>();
 

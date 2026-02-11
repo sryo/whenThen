@@ -28,6 +28,7 @@
       .map((e) => e.i),
   );
 
+  // Keep menu within viewport with 4px edge padding
   const clamped = $derived.by(() => {
     if (!menuEl) return { left: x, top: y };
     const rect = menuEl.getBoundingClientRect();

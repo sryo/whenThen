@@ -66,3 +66,10 @@ pub enum TorrentState {
     Completed,
     Error,
 }
+
+/// A pending magnet that's still fetching metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingMagnet {
+    pub info_hash: String,
+    pub name: String,
+}

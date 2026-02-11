@@ -10,6 +10,7 @@ const SOURCE_WEIGHT: f64 = 0.20;
 const GROUP_WEIGHT: f64 = 0.15;
 
 /// Score a subtitle against a video file.
+#[allow(dead_code)]
 pub fn score(video_name: &str, subtitle_name: &str) -> f64 {
     let video_info = media_info::parse(video_name);
     let sub_info = media_info::parse(subtitle_name);
@@ -56,7 +57,7 @@ fn jaro_winkler(s1: &str, s2: &str) -> f64 {
 
     let jaro = jaro_similarity(s1, s2);
 
-    // Winkler modification: boost for common prefix
+    // Jaro-Winkler: boost up to 0.4 for matching prefix (4 chars * 0.1)
     let prefix_len = s1
         .chars()
         .zip(s2.chars())

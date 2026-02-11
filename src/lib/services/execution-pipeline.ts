@@ -145,6 +145,7 @@ registerExecutor("automation", async (action, torrentId, torrentName, files) => 
     case "applescript": {
       if (!autoAction.script) throw new Error("No AppleScript set");
       await checkAutomationPermission();
+      // Escape order matters: backslashes first, then quotes, then newlines
       const escape = (s: string) =>
         s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r");
       const cleanName = cleanTorrentName(torrentName);
@@ -166,6 +167,7 @@ registerExecutor("automation", async (action, torrentId, torrentName, files) => 
 
 registerExecutor("delay", async (action) => {
   const delayAction = action as DelayAction;
+  // "months" = 30 days (simplified)
   const multipliers: Record<string, number> = {
     seconds: 1, minutes: 60, days: 86400, weeks: 604800, months: 2592000,
   };
@@ -210,7 +212,7 @@ registerExecutor("delete_source", async (action, torrentId) => {
   await torrentDelete(torrentId, deleteAction.deleteFiles);
 });
 
-// Queue of tasks ready to execute (torrent completed, waiting for a slot)
+// Tasks ready to execute, waiting for concurrency slot
 const readyQueue: string[] = [];
 
 /** Called when a torrent completes. Queues the task and drains if slots are open. */

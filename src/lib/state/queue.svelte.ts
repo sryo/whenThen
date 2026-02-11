@@ -35,6 +35,7 @@ export const queueState = {
 
   addBatch(torrentId: number, files: { index: number; name: string }[]) {
     const now = Date.now();
+    // Increment timestamp per item to preserve batch insertion order
     const newItems = files.map((f, i) => ({
       id: `${torrentId}-${f.index}-${now}-${i}`,
       torrentId,

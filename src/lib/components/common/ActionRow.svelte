@@ -89,6 +89,7 @@
     }
   }
 
+  // Actions sharing method selection UI (shell/applescript/shortcut/webhook)
   const AUTO_GROUP = new Set(["automation", "webhook"]);
   const isAutoGroup = $derived(AUTO_GROUP.has(action.type));
 
